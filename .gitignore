@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+config.local.json
+credentials.json
+*.pem
+*.key
+secrets/

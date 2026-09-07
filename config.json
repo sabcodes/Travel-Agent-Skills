@@ -1,0 +1,83 @@
+{
+  "origins": ["SFO", "SJC"],
+  "destinations": [
+    {
+      "region": "cancun",
+      "display_name": "Cancun, Mexico",
+      "code": "CUN",
+      "max_price": 550
+    },
+    {
+      "region": "jamaica",
+      "display_name": "Montego Bay, Jamaica",
+      "code": "MBJ",
+      "max_price": 650
+    },
+    {
+      "region": "jamaica",
+      "display_name": "Kingston, Jamaica",
+      "code": "KIN",
+      "max_price": 650
+    },
+    {
+      "region": "puerto_rico",
+      "display_name": "San Juan, Puerto Rico",
+      "code": "SJU",
+      "max_price": 550
+    },
+    {
+      "region": "costa_rica",
+      "display_name": "San José, Costa Rica",
+      "code": "SJO",
+      "max_price": 650
+    },
+    {
+      "region": "costa_rica",
+      "display_name": "Liberia, Costa Rica",
+      "code": "LIR",
+      "max_price": 650
+    }
+  ],
+  "default_max_cash_price_usd": 600,
+  "max_stay_nightly_usd": 250,
+  "max_stay_results": 3,
+  "default_adults": 4,
+  "stay_locations": {},
+  "target_months": ["2026-11", "2026-12", "2027-01"],
+  "default_trip_durations_days": [6, 7],
+  "rss_feeds": [
+    "https://www.doctorofcredit.com/?s=Chase&feed=rss2",
+    "https://www.doctorofcredit.com/?s=American+Express&feed=rss2",
+    "https://www.doctorofcredit.com/?s=Capital+One&feed=rss2",
+    "https://frequentmiler.com/feed/"
+  ],
+  "keywords": [
+    "chase offer",
+    "amex offer",
+    "american express offer",
+    "capital one offer",
+    "transfer bonus",
+    "ultimate rewards",
+    "membership rewards",
+    "capital one miles",
+    "american express",
+    "amex",
+    "capital one",
+    "united",
+    "aeroplan",
+    "air france",
+    "flying blue",
+    "virgin atlantic",
+    "british airways",
+    "iberia",
+    "southwest",
+    "singapore airlines",
+    "emirates",
+    "hyatt",
+    "marriott",
+    "ihg",
+    "airbnb",
+    "hotel offer"
+  ],
+  "webhook_url": ""
+}

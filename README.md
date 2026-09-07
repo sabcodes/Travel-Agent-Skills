@@ -1,0 +1,130 @@
+# SFO & SJC Flight Deal & Chase Transfer Bonus Tracker
+
+Automated, login-free tracking system and Antigravity Agent Skill that monitors cheap cash flights originating from **SFO** or **SJC** to **Cancun**, **Jamaica**, **Puerto Rico**, and **Costa Rica** across **November, December, and January** (or any destination worldwide), analyzes layovers and total journey durations, and cross-references routes with public **Chase credit card offers and transfer bonuses**.
+
+---
+
+## Features
+
+- **Login-Free & Secure**: Operates without user credentials or private API keys.
+- **Flexible dates & global routes**: Pre-configured presets remain available, while any IATA origin/destination and any date range can be searched. A city can be supplied for worldwide Airbnb lookup when the airport code is ambiguous.
+- **Preset Vacation Hotspots**:
+  - 🇲🇽 **Cancun** (`CUN`)
+  - 🇯🇲 **Jamaica** (`MBJ` Montego Bay, `KIN` Kingston)
+  - 🇵🇷 **Puerto Rico** (`SJU` San Juan, `BQN` Aguadilla)
+  - 🇨🇷 **Costa Rica** (`SJO` San José, `LIR` Liberia)
+- **Detailed Layover & Duration Intelligence**:
+  - Exact layover counts and stopover cities (e.g. `LAX`, `SAL`, `DFW`)
+  - Individual layover wait times (e.g. `2h 31m`)
+  - In-air flight duration vs. total door-to-door elapsed journey duration
+  - Max stops filter (`--max-stops 0` for nonstop, `--max-stops 1` for max 1 layover)
+- **Winter Travel Windows**: Sweeps representative date windows across **November 2026**, **December 2026**, and **January 2027**, or generates departures across any custom date range.
+- **Public Feed Monitoring**: Tracks public Chase, American Express Membership Rewards, and Capital One deals and transfer bonuses. The scanner retries publishers that reject standard Python HTTP clients with the bundled browser-compatible client.
+- **Accommodation Search**: Chains each flight's dates into public Airbnb searches, returning up to three live listings beneath the nightly budget. If no flight matches, it still provides date-specific Google Hotels and Airbnb search links.
+- **Points Synergy Engine**: Flags when a cash flight deal can be booked with transferred Chase Ultimate Rewards points (United/Aeroplan for Star Alliance, British Airways/Iberia Avios for Oneworld, Flying Blue/Virgin for SkyTeam).
+- **Versatile Alerts**: Rich terminal tables and Discord/Slack webhook dispatching.
+- **Antigravity Agent Skill**: Fully integrated into `.agents/skills/deal-tracker/` for natural language interaction.
+
+---
+
+## Installation
+
+```bash
+# 1. Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Install Playwright browser
+playwright install chromium
+```
+
+---
+
+## Usage
+
+### 1. Default Combined Sweep
+Scans active Chase deals, sweeps Nov/Dec/Jan flight deals across SFO/SJC to all 4 destinations, and performs points synergy cross-referencing:
+```bash
+.venv/bin/python main.py
+```
+
+### 2. Scan Flights with Layover & Duration Metrics
+```bash
+# Scan Costa Rica with duration and layover breakdown
+.venv/bin/python main.py --flights --dest costa_rica --dates 2027-01-15:2027-01-22
+
+# Filter for max 1 stop
+.venv/bin/python main.py --flights --dest costa_rica --dates 2027-01-15:2027-01-22 --max-stops 1
+
+# Nonstop flights only
+.venv/bin/python main.py --flights --dest cancun --dates 2026-11-13:2026-11-20 --max-stops 0
+```
+
+### 3. Query Any Destination Worldwide
+```bash
+# SFO to Tokyo (HND)
+.venv/bin/python main.py --flights --origin SFO --dest HND --dates 2027-01-15:2027-01-25
+
+# SFO or SJC to Hawaii (HNL, OGG)
+.venv/bin/python main.py --flights --origin SFO,SJC --dest HNL,OGG --dates 2026-12-05:2026-12-12
+```
+
+```bash
+# Flexible window, 4- or 7-night trips, and worldwide Airbnb search
+.venv/bin/python main.py --flights --stays --origin SFO --dest CDG --stay-location "Paris, France" \
+  --date-range 2027-03-01:2027-04-15 --trip-lengths 4,7 --date-step-days 7
+```
+
+### 4. Scan Chase, Amex, and Capital One Deals Only
+```bash
+.venv/bin/python main.py --deals
+```
+
+### 5. Search Hotels and Airbnb
+```bash
+# Scans matching flights, then attaches the top Airbnb stays under budget
+.venv/bin/python main.py --flights --stays --dest cancun --dates 2026-11-13:2026-11-20 --adults 4 --max-nightly-price 250
+```
+
+`--stays` is login-free and uses public Airbnb result cards. Availability, fees, and taxes can change before booking; verify the final price at Airbnb. A regular run with no `--deals` or `--flights` flags also includes this flight-to-stay handoff.
+
+Every stay includes its room type, bedrooms, beds, bathrooms, and approximate map coordinates when the public result card supplies them. Add `--stay-details` to enrich only the selected stays with amenities, photos, house rules, review scores, recent reviews, capacity, and public description when available:
+
+```bash
+.venv/bin/python main.py --flights --stays --stay-details --dest CUN --dates 2026-11-13:2026-11-20 --adults 4 --json
+```
+
+### 6. Export Structured JSON
+```bash
+.venv/bin/python main.py --flights --dest costa_rica --json
+```
+
+---
+
+## Webhook Notifications (Discord / Slack / Telegram)
+
+Edit `config.json` and set `"webhook_url"` to your Discord webhook URL:
+```json
+{
+  "webhook_url": "https://discord.com/api/webhooks/YOUR/WEBHOOK/URL"
+}
+```
+When configured, alerts will be formatted with duration, layover summaries, and booking links, and posted directly to your channel. If blank, alerts display in the terminal.
+
+## Security
+
+The tracked `config.json` deliberately contains no credentials. Keep `webhook_url` blank and provide a private notification endpoint through the local `WEBHOOK_URL` environment variable instead. Never commit `.env`, `config.local.json`, credentials, private keys, or API tokens; these paths are ignored by Git.
+
+---
+
+## Daily Scheduling
+
+You can schedule the tracker to run every morning at 8:00 AM using cron:
+
+```bash
+# Crontab entry:
+0 8 * * * cd "/Users/sabarnoislam/Desktop/AI projects/Travel Agent" && .venv/bin/python main.py >> tracker.log 2>&1
+```
