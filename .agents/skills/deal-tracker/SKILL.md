@@ -7,7 +7,7 @@ description: Scan worldwide cash flights, Airbnb stays, and public Chase, Americ
 
 This skill searches flights, Airbnb stays, and public Chase, American Express, and Capital One card offers/transfer bonuses, then cross-references routes with points-and-miles offers.
 
-While pre-configured for **SFO / SJC** to **Cancun**, **Jamaica**, **Puerto Rico**, and **Costa Rica** across **November, December, and January**, it supports **any origin, destination airport, and date range worldwide**.
+The checked-in defaults are **SFO / SJC** to vacation presets, but they are examples rather than a constraint. Use any IATA source airports, destinations, and travel dates worldwide.
 
 ---
 
@@ -50,6 +50,8 @@ You can pass any standard IATA airport codes to `--origin` and `--dest`:
 # SFO to London (LHR) with max 1 stop
 .venv/bin/python main.py --flights --origin SFO --dest LHR --dates 2026-11-10:2026-11-20 --max-stops 1
 ```
+
+Use `--origin`, `--origins`, or `--home-airports` with comma-separated IATA codes for a request. To make another traveler's airports persistent, copy `config.json` to the Git-ignored `config.local.json`, change `origins`, then use `--config config.local.json`. Do not overwrite the checked-in SFO/SJC defaults merely to serve another user.
 
 ### 3. Scan Card Deals & Transfer Bonuses
 ```bash

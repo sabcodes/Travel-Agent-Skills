@@ -36,7 +36,7 @@ def format_terminal_flights(flights: List[Dict[str, Any]]):
         console.print("[dim]No flight deals matching the criteria found.[/dim]")
         return
 
-    table = Table(title="✈️ SFO / SJC Cheap Flight Deals (Nov / Dec / Jan)", header_style="bold magenta")
+    table = Table(title="✈️ Cheap Flight Deals", header_style="bold magenta")
     table.add_column("Route", style="bold cyan", width=11)
     table.add_column("Destination", style="white", width=20)
     table.add_column("Price", style="bold green", justify="right", width=7)
@@ -127,7 +127,7 @@ def send_alert(webhook_url: str, title: str, details: List[Dict[str, Any]]):
             if stays:
                 line += " | 🏠 " + "; ".join(f"{stay.get('name', 'Airbnb stay')} ${stay.get('nightly_rate', 0):.0f}/night" for stay in stays)
         elif "price" in item:
-            origin = item.get("origin", "SFO")
+            origin = item.get("origin", "Origin")
             dest = item.get("destination", "")
             price = item.get("price", 0)
             airline = item.get("airline", "Airline")

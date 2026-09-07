@@ -1,6 +1,6 @@
-# SFO & SJC Flight Deal & Chase Transfer Bonus Tracker
+# Flight, Stay & Card Deal Tracker
 
-Automated, login-free tracking system and Antigravity Agent Skill that monitors cheap cash flights originating from **SFO** or **SJC** to **Cancun**, **Jamaica**, **Puerto Rico**, and **Costa Rica** across **November, December, and January** (or any destination worldwide), analyzes layovers and total journey durations, and cross-references routes with public **Chase credit card offers and transfer bonuses**.
+Automated, login-free tracker and reusable skill for cheap cash flights from any source airport, public Airbnb stays, and public Chase, Amex, and Capital One deals/transfer bonuses. Its checked-in defaults remain tailored to **SFO** and **SJC**, while every user can choose their own airports and destinations.
 
 ---
 
@@ -46,7 +46,7 @@ playwright install chromium
 ## Usage
 
 ### 1. Default Combined Sweep
-Scans active Chase deals, sweeps Nov/Dec/Jan flight deals across SFO/SJC to all 4 destinations, and performs points synergy cross-referencing:
+Scans active card deals, the checked-in SFO/SJC winter presets, stays, and points synergy:
 ```bash
 .venv/bin/python main.py
 ```
@@ -78,12 +78,28 @@ Scans active Chase deals, sweeps Nov/Dec/Jan flight deals across SFO/SJC to all 
   --date-range 2027-03-01:2027-04-15 --trip-lengths 4,7 --date-step-days 7
 ```
 
-### 4. Scan Chase, Amex, and Capital One Deals Only
+### 4. Set Airports for Another User
+
+Use any IATA sources for one search:
+
+```bash
+.venv/bin/python main.py --flights --origin ORD,MDW --dest LHR --dates 2027-05-10:2027-05-17
+```
+
+For durable personal defaults without modifying tracked settings, create an ignored local profile:
+
+```bash
+cp config.json config.local.json
+# Edit config.local.json and set "origins" to your own airport codes.
+.venv/bin/python main.py --config config.local.json
+```
+
+### 5. Scan Chase, Amex, and Capital One Deals Only
 ```bash
 .venv/bin/python main.py --deals
 ```
 
-### 5. Search Hotels and Airbnb
+### 6. Search Hotels and Airbnb
 ```bash
 # Scans matching flights, then attaches the top Airbnb stays under budget
 .venv/bin/python main.py --flights --stays --dest cancun --dates 2026-11-13:2026-11-20 --adults 4 --max-nightly-price 250
@@ -97,7 +113,7 @@ Every stay includes its room type, bedrooms, beds, bathrooms, and approximate ma
 .venv/bin/python main.py --flights --stays --stay-details --dest CUN --dates 2026-11-13:2026-11-20 --adults 4 --json
 ```
 
-### 6. Export Structured JSON
+### 7. Export Structured JSON
 ```bash
 .venv/bin/python main.py --flights --dest costa_rica --json
 ```

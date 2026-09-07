@@ -330,14 +330,15 @@ def scan_flights(
 
     return unique_deals
 
-# Async wrapper as defined in implementation spec for backward compatibility
-async def scan_sfo_flights(config_path: str = "config.json") -> List[Dict[str, Any]]:
-    """
-    Async implementation matching the original PDF specification.
-    Scans SFO flights against configured destinations.
-    """
+# Async wrapper for callers that prefer the configured origin list.
+async def scan_configured_flights(config_path: str = "config.json") -> List[Dict[str, Any]]:
+    """Scan flights from every origin configured in the selected config file."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, scan_flights, config_path)
+
+
+# Backward-compatible name from the original SFO-only implementation.
+scan_sfo_flights = scan_configured_flights
 
 if __name__ == "__main__":
     # Test sample run for SFO/SJC -> Cancun and Puerto Rico for November

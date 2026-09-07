@@ -105,9 +105,9 @@ async def run_scanner(
         send_alert(webhook_url, "New Card Deals & Transfer Bonuses", deals)
 
     if flight_stay_packages:
-        send_alert(webhook_url, "SFO / SJC Flight + Accommodation Packages", flight_stay_packages)
+        send_alert(webhook_url, "Flight + Accommodation Packages", flight_stay_packages)
     elif flights and scan_air:
-        send_alert(webhook_url, "SFO / SJC Flight Deals Found", flights)
+        send_alert(webhook_url, "Flight Deals Found", flights)
 
     if accommodations:
         for stay in accommodations:
@@ -126,7 +126,7 @@ def parse_args():
     parser.add_argument("--deals", action="store_true", help="Scan Chase, Amex, and Capital One deals / transfer bonuses")
     parser.add_argument("--flights", action="store_true", help="Scan only flights")
     parser.add_argument("--stays", "--accommodations", dest="stays", action="store_true", help="Create Hotel and Airbnb searches for the selected dates")
-    parser.add_argument("--origin", type=str, help="Comma-separated origins (e.g. SFO or SFO,SJC)")
+    parser.add_argument("--origin", "--origins", "--home-airports", dest="origin", type=str, help="Comma-separated source airports (e.g. SFO,SJC or ORD,MDW)")
     parser.add_argument("--dest", type=str, help="Comma-separated destinations or regions (e.g. cancun, jamaica, SJU, SJO)")
     parser.add_argument("--months", type=str, help="Comma-separated months (e.g. 2026-11,2026-12,2027-01)")
     parser.add_argument("--date-range", type=str, help="Flexible travel window START:END (e.g. 2027-03-01:2027-04-15)")
