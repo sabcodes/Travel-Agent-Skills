@@ -20,7 +20,11 @@ REGION_MAP = {
     "cancun": ["CUN"],
     "jamaica": ["MBJ", "KIN"],
     "puerto_rico": ["SJU", "BQN"],
-    "costa_rica": ["SJO", "LIR"]
+    "costa_rica": ["SJO", "LIR"],
+    "brazil": ["GIG"],
+    "peru": ["LIM"],
+    "guatemala": ["GUA"],
+    "maui": ["OGG"],
 }
 
 AIRPORT_NAMES = {
@@ -32,7 +36,11 @@ AIRPORT_NAMES = {
     "SJU": "San Juan, Puerto Rico (SJU)",
     "BQN": "Aguadilla, Puerto Rico (BQN)",
     "SJO": "San José, Costa Rica (SJO)",
-    "LIR": "Liberia, Costa Rica (LIR)"
+    "LIR": "Liberia, Costa Rica (LIR)",
+    "GIG": "Rio de Janeiro, Brazil (GIG)",
+    "LIM": "Lima, Peru (LIM)",
+    "GUA": "Guatemala City / Pacific Coast, Guatemala (GUA)",
+    "OGG": "Maui, Hawaii (OGG)",
 }
 
 def generate_target_date_pairs(

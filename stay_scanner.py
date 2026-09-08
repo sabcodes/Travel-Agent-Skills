@@ -21,6 +21,10 @@ AIRBNB_AREAS: Dict[str, Dict[str, Any]] = {
     "BQN": {"name": "Aguadilla, Puerto Rico", "ne": (18.55, -67.05), "sw": (18.36, -67.28), "zoom": 11},
     "SJO": {"name": "San José, Costa Rica", "ne": (10.10, -84.00), "sw": (9.82, -84.24), "zoom": 11},
     "LIR": {"name": "Liberia, Costa Rica", "ne": (10.76, -85.32), "sw": (10.48, -85.63), "zoom": 11},
+    "GIG": {"name": "Rio de Janeiro, Brazil", "ne": (-22.74, -43.12), "sw": (-23.02, -43.42), "zoom": 11},
+    "LIM": {"name": "Lima, Peru", "ne": (-11.88, -76.90), "sw": (-12.22, -77.18), "zoom": 11},
+    "GUA": {"name": "Monterrico, Guatemala", "ne": (14.02, -90.42), "sw": (13.80, -90.62), "zoom": 11},
+    "OGG": {"name": "Maui, Hawaii", "ne": (20.98, -156.48), "sw": (20.58, -156.85), "zoom": 10},
 }
 
 

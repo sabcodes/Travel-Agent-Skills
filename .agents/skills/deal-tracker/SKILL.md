@@ -7,7 +7,7 @@ description: Scan worldwide cash flights, Airbnb stays, and public Chase, Americ
 
 This skill searches flights, Airbnb stays, and public Chase, American Express, and Capital One card offers/transfer bonuses, then cross-references routes with points-and-miles offers.
 
-The checked-in defaults are **SFO / SJC** to vacation presets, but they are examples rather than a constraint. Use any IATA source airports, destinations, and travel dates worldwide.
+The checked-in defaults include SFO/SJC beach presets for Cancun, Jamaica, Puerto Rico, Costa Rica, Rio de Janeiro, Lima, Guatemala's Pacific coast, and Maui. They are examples rather than a constraint; use any IATA source airports, destinations, and travel dates worldwide.
 
 ---
 

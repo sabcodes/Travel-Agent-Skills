@@ -36,13 +36,39 @@
       "display_name": "Liberia, Costa Rica",
       "code": "LIR",
       "max_price": 650
+    },
+    {
+      "region": "brazil",
+      "display_name": "Rio de Janeiro, Brazil",
+      "code": "GIG",
+      "max_price": 900
+    },
+    {
+      "region": "peru",
+      "display_name": "Lima, Peru",
+      "code": "LIM",
+      "max_price": 800
+    },
+    {
+      "region": "guatemala",
+      "display_name": "Guatemala Pacific Coast (via Guatemala City)",
+      "code": "GUA",
+      "max_price": 650
+    },
+    {
+      "region": "maui",
+      "display_name": "Maui, Hawaii",
+      "code": "OGG",
+      "max_price": 650
     }
   ],
   "default_max_cash_price_usd": 600,
   "max_stay_nightly_usd": 250,
   "max_stay_results": 3,
   "default_adults": 4,
-  "stay_locations": {},
+  "stay_locations": {
+    "GUA": "Monterrico, Guatemala"
+  },
   "target_months": ["2026-11", "2026-12", "2027-01"],
   "default_trip_durations_days": [6, 7],
   "rss_feeds": [

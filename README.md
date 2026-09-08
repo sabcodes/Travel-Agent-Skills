@@ -13,6 +13,10 @@ Automated, login-free tracker and reusable skill for cheap cash flights from any
   - 🇯🇲 **Jamaica** (`MBJ` Montego Bay, `KIN` Kingston)
   - 🇵🇷 **Puerto Rico** (`SJU` San Juan, `BQN` Aguadilla)
   - 🇨🇷 **Costa Rica** (`SJO` San José, `LIR` Liberia)
+  - 🇧🇷 **Brazil** (`GIG` Rio de Janeiro)
+  - 🇵🇪 **Peru** (`LIM` Lima)
+  - 🇬🇹 **Guatemala Pacific Coast** (`GUA` Guatemala City, with Monterrico stays)
+  - 🌺 **Maui, Hawaii** (`OGG` Kahului)
 - **Detailed Layover & Duration Intelligence**:
   - Exact layover counts and stopover cities (e.g. `LAX`, `SAL`, `DFW`)
   - Individual layover wait times (e.g. `2h 31m`)
