@@ -86,8 +86,9 @@ async def run_scanner(
             stay_location=stay_location,
             include_stay_details=stay_details,
         )
-    elif scan_stays:
-        # Retain a useful hotel/Airbnb search-link result when no flight is found.
+    if scan_stays:
+        # Always retain date-specific hotel and Airbnb provider links, including
+        # when live Airbnb cards were successfully attached to cash fares.
         accommodation_dates = date_pairs
         if not accommodation_dates:
             from flight_scanner import generate_target_date_pairs

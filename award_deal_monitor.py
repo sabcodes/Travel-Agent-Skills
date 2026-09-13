@@ -80,10 +80,12 @@ def _contains_phrase(normalised_text: str, phrase: str) -> bool:
 
 def _destination_aliases(destination: Dict[str, Any]) -> List[str]:
     display_name = re.sub(r"\([^)]*\)", " ", destination.get("display_name", ""))
+    display_parts = [part.strip() for part in display_name.split(",") if part.strip()]
     aliases = {
         destination.get("region", "").replace("_", " "),
         display_name,
-        *(part.strip() for part in display_name.split(",")),
+        *(display_parts[:1]),
+        *(destination.get("aliases", [])),
     }
     return sorted({_normalise_text(alias) for alias in aliases if _normalise_text(alias)}, key=len, reverse=True)
 

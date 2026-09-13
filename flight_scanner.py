@@ -30,6 +30,10 @@ REGION_MAP = {
     "peru": ["LIM"],
     "guatemala": ["GUA"],
     "maui": ["OGG"],
+    "belize": ["BZE"],
+    "mexico_city": ["MEX"],
+    "saint_lucia": ["UVF"],
+    "roatan_bay_islands": ["RTB"],
 }
 
 AIRPORT_NAMES = {
@@ -46,6 +50,10 @@ AIRPORT_NAMES = {
     "LIM": "Lima, Peru (LIM)",
     "GUA": "Guatemala City / Pacific Coast, Guatemala (GUA)",
     "OGG": "Maui, Hawaii (OGG)",
+    "BZE": "Belize City, Belize (BZE)",
+    "MEX": "Mexico City, Mexico (MEX)",
+    "UVF": "St. Lucia / Hewanorra (UVF)",
+    "RTB": "Roatán & Bay Islands, Honduras (RTB)",
 }
 
 FLIGHT_LOOKUP_ATTEMPTS = 2

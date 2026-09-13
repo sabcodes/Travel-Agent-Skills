@@ -20,6 +20,10 @@ DESTINATION_NAMES = {
     "BQN": "Aguadilla, Puerto Rico",
     "SJO": "San José, Costa Rica",
     "LIR": "Liberia, Costa Rica",
+    "BZE": "Belize City, Belize",
+    "MEX": "Mexico City, Mexico",
+    "UVF": "St. Lucia (Hewanorra)",
+    "RTB": "Roatán & Bay Islands, Honduras",
 }
 
 

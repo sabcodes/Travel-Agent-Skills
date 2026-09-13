@@ -66,6 +66,34 @@
       "display_name": "Maui, Hawaii",
       "code": "OGG",
       "max_price": 650
+    },
+    {
+      "region": "belize",
+      "display_name": "Belize City, Belize",
+      "code": "BZE",
+      "aliases": ["Belize", "Belize City"],
+      "max_price": 850
+    },
+    {
+      "region": "mexico_city",
+      "display_name": "Mexico City, Mexico",
+      "code": "MEX",
+      "aliases": ["Mexico City", "Ciudad de México", "CDMX"],
+      "max_price": 600
+    },
+    {
+      "region": "saint_lucia",
+      "display_name": "St. Lucia (Hewanorra)",
+      "code": "UVF",
+      "aliases": ["St. Lucia", "Saint Lucia", "Hewanorra"],
+      "max_price": 1200
+    },
+    {
+      "region": "roatan_bay_islands",
+      "display_name": "Roatán & Bay Islands, Honduras",
+      "code": "RTB",
+      "aliases": ["Roatán", "Roatan", "Bay Islands", "Islas de la Bahía"],
+      "max_price": 1000
     }
   ],
   "default_max_cash_price_usd": 600,
@@ -73,7 +101,11 @@
   "max_stay_results": 3,
   "default_adults": 4,
   "stay_locations": {
-    "GUA": "Monterrico, Guatemala"
+    "GUA": "Monterrico, Guatemala",
+    "BZE": "Belize City, Belize",
+    "MEX": "Mexico City, Mexico",
+    "UVF": "St. Lucia",
+    "RTB": "Roatán & Bay Islands, Honduras"
   },
   "target_months": ["2026-11", "2026-12", "2027-01"],
   "default_trip_durations_days": [6, 7],

@@ -1,10 +1,31 @@
+import json
 import unittest
 from unittest.mock import patch
 
+from accommodation_scanner import _resolve_destinations
+from stay_scanner import AIRBNB_AREAS
 from stay_scanner import package_flights_with_stays, scan_airbnb_stays
 
 
 class StayScannerTests(unittest.TestCase):
+    def test_four_added_destinations_have_hotel_and_airbnb_coverage(self):
+        with open("config.json", "r", encoding="utf-8") as config_file:
+            config = json.load(config_file)
+
+        self.assertEqual(
+            _resolve_destinations(
+                config,
+                ["belize", "mexico_city", "saint_lucia", "roatan_bay_islands"],
+            ),
+            [
+                ("BZE", "Belize City, Belize"),
+                ("MEX", "Mexico City, Mexico"),
+                ("UVF", "St. Lucia (Hewanorra)"),
+                ("RTB", "Roatán & Bay Islands, Honduras"),
+            ],
+        )
+        self.assertTrue({"BZE", "MEX", "UVF", "RTB"}.issubset(AIRBNB_AREAS))
+
     @patch("stay_scanner.pyairbnb.search_all")
     def test_keeps_three_cheapest_stays_under_budget(self, search_all):
         search_all.return_value = [

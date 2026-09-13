@@ -102,7 +102,7 @@ cp config.json config.local.json
 ### 5. Scan Reported Award-Flight Deals Only
 
 ```bash
-# All eight checked-in regions for November 2026 through January 2027
+# All twelve checked-in regions for November 2026 through January 2027
 .venv/bin/python main.py --award-deals --origin SFO,SJC --months 2026-11,2026-12,2027-01
 
 # One configured region
@@ -111,7 +111,7 @@ cp config.json config.local.json
 
 The award radar consumes public RSS/Atom metadata from configured publishers such as Frequent Miler, One Mile at a Time, View from the Wing, and AwardWallet Blog. It does not log in to loyalty accounts or scrape private award-search endpoints. It checks each publisher's robots policy before fetching a feed. A TLS or transport failure may receive one compatibility retry; 401/403 responses and disallowed paths are reported as blocked, while 429 responses are reported as rate-limited with any `Retry-After` value preserved. These access states are never presented as an empty search. A result means that a publisher reported an opportunity; points prices and seats can disappear, so verify on the linked loyalty program before transferring points. “No matching reported leads” does not mean that no award seats exist.
 
-The checked-in configuration contains Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, and Maui—eleven airport records across eight regions. Dhaka is not included.
+The checked-in configuration contains Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, Maui, Belize, Mexico City, St. Lucia, and Roatán/Bay Islands—fifteen airport records across twelve regions. Dhaka is not included.
 
 ### 6. Scan Chase, Amex, and Capital One Deals Only
 ```bash

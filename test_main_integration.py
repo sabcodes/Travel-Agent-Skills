@@ -20,6 +20,43 @@ class MainIntegrationTests(unittest.TestCase):
         packaged_flight = package_stays.call_args.args[0][0]
         self.assertEqual(packaged_flight["chase_partner_info"]["alliance"], "Star Alliance")
 
+    @patch("main.search_accommodations")
+    @patch("main.package_flights_with_stays", return_value=[])
+    @patch("main.scan_flights")
+    def test_stay_scan_keeps_hotel_and_airbnb_links_when_flights_exist(
+        self, scan_flights, package_stays, search_accommodations
+    ):
+        scan_flights.return_value = [{
+            "origin": "SFO", "destination": "BZE", "airline": "United",
+            "price": 650, "departure_date": "2026-11-13", "return_date": "2026-11-20",
+        }]
+        search_accommodations.return_value = [{
+            "provider": "Google Hotels", "destination_name": "Belize City, Belize",
+            "check_in": "2026-11-13", "check_out": "2026-11-20",
+            "max_nightly_price": 400, "max_total_price": 2800,
+            "booking_url": "https://example.com/hotels",
+        }]
+        dates = [("2026-11-13", "2026-11-20")]
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            asyncio.run(run_scanner(
+                scan_cc=False,
+                scan_air=True,
+                scan_stays=True,
+                destinations=["belize"],
+                date_pairs=dates,
+                max_nightly_price=400,
+                adults=4,
+                output_json=True,
+            ))
+
+        package_stays.assert_called_once()
+        search_accommodations.assert_called_once_with(
+            "config.json", ["belize"], dates, 400, 4
+        )
+        self.assertIn('"total_accommodation_searches": 1', output.getvalue())
+
     @patch("main.scan_flights")
     @patch("main.fetch_award_deals")
     def test_award_only_scan_uses_filters_and_emits_json_without_cash_lookup(self, fetch_awards, scan_flights):

@@ -20,10 +20,22 @@ class AwardDestinationCoverageTests(unittest.TestCase):
     def setUp(self):
         self.config = load_config()
 
-    def test_checked_in_config_has_eight_regions_and_excludes_dhaka(self):
+    def test_checked_in_config_has_twelve_regions_and_excludes_dhaka(self):
         self.assertEqual(
             {destination["region"] for destination in self.config["destinations"]},
-            {"cancun", "jamaica", "puerto_rico", "costa_rica", "brazil", "peru", "guatemala", "maui"},
+            {
+                "cancun", "jamaica", "puerto_rico", "costa_rica", "brazil", "peru",
+                "guatemala", "maui", "belize", "mexico_city", "saint_lucia",
+                "roatan_bay_islands",
+            },
+        )
+        self.assertEqual(
+            {
+                destination["code"]
+                for destination in self.config["destinations"]
+                if destination["region"] in {"belize", "mexico_city", "saint_lucia", "roatan_bay_islands"}
+            },
+            {"BZE", "MEX", "UVF", "RTB"},
         )
         self.assertNotIn("dhaka", json.dumps(self.config).lower())
         self.assertNotIn('"dac"', json.dumps(self.config).lower())
@@ -38,6 +50,10 @@ class AwardDestinationCoverageTests(unittest.TestCase):
             "Peru": "peru",
             "Guatemala": "guatemala",
             "Maui": "maui",
+            "Belize": "belize",
+            "Mexico City": "mexico_city",
+            "St. Lucia": "saint_lucia",
+            "Roatán": "roatan_bay_islands",
         }
         for place_name, expected_region in cases.items():
             with self.subTest(place_name=place_name):
@@ -48,6 +64,15 @@ class AwardDestinationCoverageTests(unittest.TestCase):
                 self.assertEqual(match_level, "regional-match")
                 self.assertEqual(airport_codes, [])
 
+    def test_mexico_country_name_does_not_also_match_mexico_city(self):
+        airport_codes, regions, match_level = match_configured_destinations(
+            "New award space to Cancun, Mexico", self.config
+        )
+
+        self.assertEqual(airport_codes, [])
+        self.assertEqual(regions, ["cancun"])
+        self.assertEqual(match_level, "regional-match")
+
     def test_dhaka_is_not_a_fallback_destination(self):
         airport_codes, regions, match_level = match_configured_destinations(
             "SFO to Dhaka (DAC) award seats from 70,000 miles", self.config
@@ -56,14 +81,17 @@ class AwardDestinationCoverageTests(unittest.TestCase):
         self.assertEqual(regions, [])
         self.assertEqual(match_level, "general-sale")
 
-    def test_full_feed_pipeline_returns_all_eight_regions_but_not_dhaka(self):
+    def test_full_feed_pipeline_returns_all_twelve_regions_but_not_dhaka(self):
         config = dict(self.config)
         config.update({
-            "award_deal_feeds": [{"name": "Eight Region Fixture", "url": "https://feeds.example/eight"}],
+            "award_deal_feeds": [{"name": "Twelve Region Fixture", "url": "https://feeds.example/twelve"}],
             "award_deal_max_age_days": 365,
             "include_general_award_sales": False,
         })
-        places = ("Cancun", "Jamaica", "Puerto Rico", "Costa Rica", "Brazil", "Peru", "Guatemala", "Maui")
+        places = (
+            "Cancun", "Jamaica", "Puerto Rico", "Costa Rica", "Brazil", "Peru",
+            "Guatemala", "Maui", "Belize", "Mexico City", "St. Lucia", "Roatán",
+        )
         items = [
             {
                 "title": f"Award space to {place} in December 2026 from 20,000 miles",
@@ -83,10 +111,14 @@ class AwardDestinationCoverageTests(unittest.TestCase):
                 months=["2026-12"], fetch_content=lambda session, url: rss_document(*items)
             )
 
-        self.assertEqual(len(leads), 8)
+        self.assertEqual(len(leads), 12)
         self.assertEqual(
             {lead["matched_regions"][0] for lead in leads},
-            {"cancun", "jamaica", "puerto_rico", "costa_rica", "brazil", "peru", "guatemala", "maui"},
+            {
+                "cancun", "jamaica", "puerto_rico", "costa_rica", "brazil", "peru",
+                "guatemala", "maui", "belize", "mexico_city", "saint_lucia",
+                "roatan_bay_islands",
+            },
         )
         self.assertNotIn("dhaka", json.dumps(leads).lower())
 

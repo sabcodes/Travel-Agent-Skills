@@ -25,6 +25,10 @@ AIRBNB_AREAS: Dict[str, Dict[str, Any]] = {
     "LIM": {"name": "Lima, Peru", "ne": (-11.88, -76.90), "sw": (-12.22, -77.18), "zoom": 11},
     "GUA": {"name": "Monterrico, Guatemala", "ne": (14.02, -90.42), "sw": (13.80, -90.62), "zoom": 11},
     "OGG": {"name": "Maui, Hawaii", "ne": (20.98, -156.48), "sw": (20.58, -156.85), "zoom": 10},
+    "BZE": {"name": "Belize City, Belize", "ne": (17.65, -88.05), "sw": (17.38, -88.35), "zoom": 10},
+    "MEX": {"name": "Mexico City, Mexico", "ne": (19.60, -98.95), "sw": (19.18, -99.38), "zoom": 10},
+    "UVF": {"name": "St. Lucia", "ne": (14.12, -60.85), "sw": (13.70, -61.12), "zoom": 9},
+    "RTB": {"name": "Roatán & Bay Islands, Honduras", "ne": (16.48, -86.20), "sw": (16.20, -86.62), "zoom": 10},
 }
 
 
