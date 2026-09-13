@@ -65,6 +65,29 @@ def _nightly_price(price: Dict[str, Any], nights: int) -> Optional[float]:
     return amount
 
 
+def _stay_sort_key(stay: Dict[str, Any]) -> Tuple[Any, ...]:
+    """Rank by price, then use stable listing fields for exact ties."""
+    return (
+        stay["nightly_rate"],
+        stay["total_price"],
+        stay["listing_id"],
+        stay["name"],
+    )
+
+
+def _stay_identity(stay: Dict[str, Any]) -> Tuple[Any, ...]:
+    """Identify repeated result cards without merging unrelated listings."""
+    if stay["listing_id"]:
+        return ("listing_id", stay["listing_id"])
+    coordinates = stay.get("approximate_coordinates") or {}
+    return (
+        "fallback",
+        stay["name"].strip().casefold(),
+        coordinates.get("latitude"),
+        coordinates.get("longitude", coordinates.get("longitud")),
+    )
+
+
 def _listing_layout(listing: Dict[str, Any]) -> Dict[str, Optional[int]]:
     """Extract bedrooms, beds, and bathrooms from Airbnb's result-card copy."""
     content = listing.get("structuredContent", {}) if isinstance(listing, dict) else {}
@@ -156,6 +179,7 @@ def scan_airbnb_stays(
     adults: int = 2,
     max_results: int = 3,
     include_details: bool = False,
+    source_errors: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Return up to ``max_results`` public Airbnb listings under the nightly cap.
 
@@ -191,6 +215,15 @@ def scan_airbnb_stays(
             timeout=30,
         )
     except Exception as error:
+        if source_errors is not None:
+            source_errors.append({
+                "component": "airbnb_stays",
+                "status": "unavailable",
+                "destination": destination,
+                "check_in": check_in_str,
+                "check_out": check_out_str,
+                "message": str(error),
+            })
         print(f"[StayScanner] Error fetching Airbnb stays for {destination}: {error}")
         return []
 
@@ -224,7 +257,14 @@ def scan_airbnb_stays(
             "url": _room_url(room_id, check_in_str, check_out_str, adults) if room_id else "",
         })
 
-    selected = sorted(affordable, key=lambda stay: (stay["nightly_rate"], stay["total_price"]))[:max_results]
+    unique_stays: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+    for stay in affordable:
+        identity = _stay_identity(stay)
+        current = unique_stays.get(identity)
+        if current is None or _stay_sort_key(stay) < _stay_sort_key(current):
+            unique_stays[identity] = stay
+
+    selected = sorted(unique_stays.values(), key=_stay_sort_key)[:max_results]
     if include_details:
         for stay in selected:
             if stay["listing_id"]:
@@ -249,6 +289,7 @@ def package_flights_with_stays(
     adults: Optional[int] = None,
     stay_location: Optional[str] = None,
     include_stay_details: bool = False,
+    source_errors: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Attach cached Airbnb results to every flight with usable travel dates."""
     with open(config_path, "r", encoding="utf-8") as config_file:
@@ -275,6 +316,7 @@ def package_flights_with_stays(
                     adults=guest_count,
                     max_results=max_results,
                     include_details=include_stay_details,
+                    source_errors=source_errors,
                 )
             stays = cached_stays[cache_key]
         packages.append({"flight": dict(flight), "stays": stays})

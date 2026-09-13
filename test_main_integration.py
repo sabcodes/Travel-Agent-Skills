@@ -92,6 +92,31 @@ class MainIntegrationTests(unittest.TestCase):
         self.assertIn("provider unavailable", output.getvalue())
         self.assertIn('"total_accommodation_searches": 1', output.getvalue())
 
+    @patch("stay_scanner.pyairbnb.search_all", side_effect=RuntimeError("provider changed"))
+    @patch("main.search_accommodations", return_value=[])
+    @patch("main.scan_flights")
+    def test_stay_scan_emits_airbnb_provider_errors_in_json(
+        self, scan_flights, search_accommodations, search_all
+    ):
+        scan_flights.return_value = [{
+            "origin": "SFO", "destination": "CUN", "airline": "United",
+            "price": 491, "departure_date": "2026-11-13", "return_date": "2026-11-20",
+        }]
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            asyncio.run(run_scanner(
+                scan_cc=False,
+                scan_air=True,
+                scan_stays=True,
+                date_pairs=[("2026-11-13", "2026-11-20")],
+                output_json=True,
+            ))
+
+        self.assertIn('"component": "airbnb_stays"', output.getvalue())
+        self.assertIn('"status": "unavailable"', output.getvalue())
+        self.assertIn("provider changed", output.getvalue())
+
     @patch("main.scan_flights")
     @patch("main.fetch_award_deals")
     def test_award_only_scan_uses_filters_and_emits_json_without_cash_lookup(self, fetch_awards, scan_flights):

@@ -94,6 +94,7 @@ async def run_scanner(
             adults=adults,
             stay_location=stay_location,
             include_stay_details=stay_details,
+            source_errors=source_errors,
         )
     if scan_stays:
         # Always retain date-specific hotel and Airbnb provider links, including

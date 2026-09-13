@@ -100,10 +100,23 @@ def search_accommodations(
                 "adults": guest_count,
                 "max_nightly_price": nightly_budget,
                 "max_total_price": round(nightly_budget * nights, 2),
-                "rate_status": "Search provider for live availability and final taxes.",
             }
             results.extend([
-                {**common, "provider": "Google Hotels", "accommodation_type": "hotel", "booking_url": _google_hotels_url(destination_name, check_in, check_out, guest_count)},
-                {**common, "provider": "Airbnb", "accommodation_type": "airbnb", "booking_url": _airbnb_url(destination_name, check_in, check_out, guest_count)},
+                {
+                    **common,
+                    "provider": "Google Hotels",
+                    "accommodation_type": "hotel",
+                    "inventory_status": "search_link_only",
+                    "rate_status": "Search handoff only; no hotel prices or availability were retrieved.",
+                    "booking_url": _google_hotels_url(destination_name, check_in, check_out, guest_count),
+                },
+                {
+                    **common,
+                    "provider": "Airbnb",
+                    "accommodation_type": "airbnb",
+                    "inventory_status": "search_link_only",
+                    "rate_status": "Search handoff only; verify live availability, fees, and taxes with Airbnb.",
+                    "booking_url": _airbnb_url(destination_name, check_in, check_out, guest_count),
+                },
             ])
     return results
