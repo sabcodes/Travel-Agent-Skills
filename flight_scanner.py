@@ -88,7 +88,7 @@ def _get_flights_resilient(query):
     """Fetch with fast-flights while tolerating Google's unpriced result rows."""
     try:
         return get_flights(query)
-    except IndexError as original_error:
+    except (IndexError, TypeError) as original_error:
         html = fetch_flights_html(query)
         script = LexborHTMLParser(html).css_first(r"script.ds\:1")
         if script is None:
@@ -97,6 +97,8 @@ def _get_flights_resilient(query):
         js = script.text()
         data = js.split("data:", 1)[1].rsplit(",", 1)[0]
         payload = json.loads(data)
+        if isinstance(payload, list) and len(payload) > 3 and payload[3] is None:
+            return []
         if _drop_unpriced_flight_groups(payload) == 0:
             raise original_error
 
