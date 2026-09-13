@@ -7,7 +7,7 @@ description: Use when users ask to find or compare cash flights, publicly report
 
 This is the project's master travel-search skill. It routes cash fares, public award reports, stays, and card/transfer offers through one shared configuration.
 
-The checked-in defaults include SFO/SJC beach presets for Cancun, Jamaica, Puerto Rico, Costa Rica, Rio de Janeiro, Lima, Guatemala's Pacific coast, and Maui. They are examples rather than a constraint; use any IATA source airports, destinations, and travel dates worldwide.
+The checked-in defaults include 12 regions: Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala's Pacific coast, Maui, Belize, Mexico City, St. Lucia, and Roatán/Bay Islands. They are examples rather than a constraint; use any IATA source airports, destinations, and travel dates worldwide. When a request names destinations, pass only those destinations (for this project: `belize,mexico_city,saint_lucia,roatan_bay_islands` or `BZE,MEX,UVF,RTB`), never the whole configured list.
 
 ## Execution Priority
 
@@ -27,7 +27,25 @@ If the user asks for a live, bookable award seat, use `--award-deals` for leads 
 
 If the flight provider raises a connectivity or parser error, diagnose the project scanner and report the failure distinctly from “no fares.” Do not silently switch to computer-use browser automation. Use a browser only when the user explicitly requests it or the project path remains unavailable after reasonable diagnosis, and disclose the fallback.
 
-For long-haul routes, pass a realistic `--max-price`; the checked-in default may filter out every valid fare. For flexible dates, start with a coarse sweep, then search the most promising departures and adjacent dates (typically ±3 days) as exact `--dates` pairs. A weekly grid alone can miss the cheapest weekday. Treat `--date-range` as a total travel window whose returns must fit before its end; when the user gives a departure-only window, include date pairs whose returns extend beyond that window.
+For a flights-plus-points request that excludes stays, always invoke all three modes explicitly:
+
+```bash
+.venv/bin/python main.py --flights --award-deals --deals --origin ORIGIN --dest DESTINATION --dates DEPARTURE:RETURN --json
+```
+
+Add the user's `--max-price` and `--max-stops` constraints when supplied. Do not omit the three mode flags: running without a primary mode also starts the stays workflow.
+
+Before running or presenting a command, translate every explicit request constraint and verify that it appears in the command:
+
+- “under,” “up to,” or “maximum” cash budget → `--max-price AMOUNT`
+- “nonstop” → `--max-stops 0`
+- “no more than one stop” or another stop limit → `--max-stops NUMBER`
+- exact departure and return dates → `--dates DEPARTURE:RETURN`
+- flights + public award reports + card/transfer offers, without stays → include `--flights --award-deals --deals` and omit `--stays`
+
+When selecting the “cheapest” flight, inspect the complete structured `flight_deals` array rather than a truncated terminal table. First discard any item that violates the requested origin, destination, dates, price ceiling, or stop limit; then rank qualifying items by numeric `price` ascending. Break exact price ties by fewer `stops`, then shorter `total_journey_duration`, then airline name. Never replace the cash-price winner with a more convenient or points-capable itinerary unless the user requested a different objective. If useful, show such an itinerary separately as an alternative.
+
+For diagnostic coverage, temporarily pass a realistic discovery ceiling such as `--max-price 2000`; this overrides the configured destination thresholds, so treat results as candidates and compare them with `config.json` before calling them deals. Omit the override for normal monitoring. One command can exercise representative seven-night departures on 2026-11-13, 2026-12-11, and 2027-01-08: use `--date-range 2026-11-13:2027-01-22 --trip-lengths 7 --date-step-days 28`. For flexible dates, start with a coarse sweep, then search the most promising departures and adjacent dates (typically ±3 days) as exact `--dates` pairs. A weekly grid alone can miss the cheapest weekday. Treat `--date-range` as a total travel window whose returns must fit before its end; when the user gives a departure-only window, include date pairs whose returns extend beyond that window.
 
 ---
 
@@ -77,14 +95,17 @@ Use `--origin`, `--origins`, or `--home-airports` with comma-separated IATA code
 ### 3. Scan Public Award-Deal Reports
 
 ```bash
-# Uses all eight checked-in regions; Dhaka is not configured
+# Uses all 12 checked-in regions; Dhaka is not configured
 .venv/bin/python main.py --award-deals --origin SFO,SJC --months 2026-11,2026-12,2027-01
 
 # Narrow to one region and return structured leads
 .venv/bin/python main.py --award-deals --dest jamaica --months 2026-11,2026-12,2027-01 --json
+
+# Only the requested configured destinations
+.venv/bin/python main.py --award-deals --origin SFO,SJC --dest belize,mexico_city,saint_lucia,roatan_bay_islands --months 2026-11,2026-12,2027-01 --json
 ```
 
-Every result has `availability_status: reported` and `verification_required: true`. Preserve those meanings in summaries. Link to the original publisher or loyalty program so the user can verify availability before transferring points. If the command returns no leads, say “no matching reported leads”; never say that no award seats exist.
+Every result has `availability_status: reported` and `verification_required: true`. Preserve those meanings in summaries. Reported articles are leads, not live inventory; never claim seats, points prices, taxes, or transferability are currently available. Link to the original publisher or loyalty program so the user can verify availability before transferring points. If the command returns no leads, say “no matching reported leads”; never say that no award seats exist. A source `blocked`, `rate-limited`, or `unavailable` status is a provider error and must remain distinct from an empty result.
 
 ### 4. Scan Card Deals & Transfer Bonuses
 ```bash
@@ -99,11 +120,25 @@ Every result has `availability_status: reported` and `verification_required: tru
 
 Use `--dates DEPARTURE:RETURN` for one fixed trip. Use `--date-range START:END` with `--trip-lengths` for arbitrary windows; generated stays inherit each returned flight's dates. `--dest` accepts preset regions or any IATA airport code.
 
+For a stay-focused check that must still produce Google Hotels and Airbnb links when flights are unavailable, use `--stays` with an exact pair and the requested location/budget/party size, for example:
+```bash
+.venv/bin/python main.py --stays --origin SFO,SJC --dest belize,mexico_city,saint_lucia,roatan_bay_islands --dates 2026-11-13:2026-11-20 --max-nightly-price 500 --adults 4 --json
+```
+Run it for each representative pair. `--stays` also enables flights internally; preserve any flight provider error from `source_errors` and independently report generated public hotel/Airbnb links rather than calling the result “no stays.”
+
 Stay results automatically include room type, beds, bedrooms, bathrooms, and approximate coordinates where the public card exposes them. Add `--stay-details` only when richer public listing data is needed; it fetches amenities, photos, rules, review signals, capacity, and available description for the returned top stays.
 
 ### 6. Full Sweep (Cash + Awards + Stays + Deals + Points Synergy)
 ```bash
 .venv/bin/python main.py --dest puerto_rico
+
+# Four-destination diagnostic sweep across one week in each target month.
+# No primary mode flag means cash, public award reports, card/transfer offers,
+# Airbnb cards, and hotel/Airbnb links all run together.
+.venv/bin/python main.py --origin SFO,SJC \
+  --dest belize,mexico_city,saint_lucia,roatan_bay_islands \
+  --date-range 2026-11-13:2027-01-22 --trip-lengths 7 --date-step-days 28 \
+  --max-price 2000 --max-nightly-price 500 --adults 4 --json
 ```
 
 ### 7. Structured JSON Output (For Agent Processing)
@@ -130,6 +165,8 @@ Every flight deal extracted contains full duration and stopover metrics:
 - Capture only public offers and transfer bonuses; never request or handle account credentials.
 - Tag every deal with matching issuer names (`Chase`, `American Express`, and/or `Capital One`) so consumers can filter them reliably.
 - Preserve the existing Chase transfer-partner cross-reference. Amex and Capital One offers are surfaced even when no direct airline-partner model applies.
+- Treat `chase_partner_info` as possible programs through which the operating airline might be bookable. It is not a points price, live award inventory, or proof that a transfer will work for the captured cash itinerary.
+- Mention a transfer bonus as relevant only when its receiving loyalty program overlaps a usable program for the selected itinerary. Do not infer relevance from the card issuer or airline alliance alone.
 
 ## Award-Deal Safety and Accuracy
 
@@ -141,7 +178,13 @@ Every flight deal extracted contains full duration and stopover metrics:
 - Keep `blocked`, `rate-limited`, and `unavailable` distinct from “no matching reported leads” in user-facing results.
 - Never invent missing routes, months, cabins, points, taxes, seats, or programs.
 - Treat article and feed results as time-sensitive leads. Verify live inventory with the named loyalty program before recommending a points transfer.
-- The checked-in scope is Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, and Maui. Dhaka/DAC is not a fallback destination.
+- The checked-in scope is Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, Maui, Belize, Mexico City, St. Lucia, and Roatán/Bay Islands. Dhaka/DAC is not a fallback destination.
+
+## Verification
+
+- Run `.venv/bin/python -B -W error::DeprecationWarning -m unittest discover -v`; this project uses `unittest` and does not require `pytest`.
+- For live smoke tests, save structured output with `--output PATH`, inspect every requested destination, and report provider errors separately from valid empty results.
+- A cash fare's `chase_partner_info` is a possible transfer path, not proof of live award space. Only a sourced award lead belongs under award results, and it still requires live loyalty-program verification.
 
 ## Chase Points Synergy & Partner Rules
 

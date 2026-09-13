@@ -4,6 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
+from flight_scanner import FlightLookupError
 from main import run_scanner
 
 
@@ -55,6 +56,40 @@ class MainIntegrationTests(unittest.TestCase):
         search_accommodations.assert_called_once_with(
             "config.json", ["belize"], dates, 400, 4
         )
+        self.assertIn('"total_accommodation_searches": 1', output.getvalue())
+
+    @patch("main.search_accommodations")
+    @patch("main.scan_flights", side_effect=FlightLookupError("provider unavailable"))
+    def test_stay_scan_preserves_flight_error_and_still_returns_provider_links(
+        self, scan_flights, search_accommodations
+    ):
+        search_accommodations.return_value = [{
+            "provider": "Google Hotels", "destination_name": "St. Lucia (Hewanorra)",
+            "check_in": "2027-01-08", "check_out": "2027-01-15",
+            "max_nightly_price": 500, "max_total_price": 3500,
+            "booking_url": "https://example.com/hotels",
+        }]
+        dates = [("2027-01-08", "2027-01-15")]
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            asyncio.run(run_scanner(
+                scan_cc=False,
+                scan_air=True,
+                scan_stays=True,
+                destinations=["saint_lucia"],
+                date_pairs=dates,
+                max_nightly_price=500,
+                adults=4,
+                output_json=True,
+            ))
+
+        search_accommodations.assert_called_once_with(
+            "config.json", ["saint_lucia"], dates, 500, 4
+        )
+        self.assertIn('"source_errors"', output.getvalue())
+        self.assertIn('"component": "cash_flights"', output.getvalue())
+        self.assertIn("provider unavailable", output.getvalue())
         self.assertIn('"total_accommodation_searches": 1', output.getvalue())
 
     @patch("main.scan_flights")

@@ -7,7 +7,7 @@ from typing import Optional, List
 
 from feed_monitor import fetch_card_deals
 from award_deal_monitor import attach_transfer_deals, fetch_award_deals
-from flight_scanner import generate_date_pairs_between, scan_flights, scan_sfo_flights
+from flight_scanner import FlightLookupError, generate_date_pairs_between, scan_flights, scan_sfo_flights
 from accommodation_scanner import search_accommodations
 from stay_scanner import package_flights_with_stays
 from synergy_engine import analyze_synergies
@@ -42,6 +42,7 @@ async def run_scanner(
     flights = []
     accommodations = []
     flight_stay_packages = []
+    source_errors = []
 
     # 1. Scan Credit Card & Transfer Deals
     if scan_cc:
@@ -61,16 +62,24 @@ async def run_scanner(
 
     # 3. Scan Google Flights
     if scan_air:
-        flights = scan_flights(
-            config_path=config_path,
-            origins=origins,
-            destinations=destinations,
-            months=months,
-            max_price=max_price,
-            max_stops=max_stops,
-            date_pairs=date_pairs,
-            trip_durations_days=trip_durations_days,
-        )
+        try:
+            flights = scan_flights(
+                config_path=config_path,
+                origins=origins,
+                destinations=destinations,
+                months=months,
+                max_price=max_price,
+                max_stops=max_stops,
+                date_pairs=date_pairs,
+                trip_durations_days=trip_durations_days,
+                source_errors=source_errors,
+            )
+        except FlightLookupError as error:
+            if not scan_stays:
+                raise
+            if not source_errors:
+                source_errors.append({"component": "cash_flights", "status": "unavailable", "message": str(error)})
+            print(f"⚠️ Cash-flight provider unavailable; continuing with accommodation links: {error}")
 
     # 4. Preserve points-and-miles context in both standalone flights and packages.
     if flights:
@@ -98,6 +107,7 @@ async def run_scanner(
     # 6. JSON output mode if requested
     if output_json or output_file:
         result_payload = {
+            "source_errors": source_errors,
             "credit_card_deals": deals,
             "award_deals": award_deals,
             "flight_deals": flights,

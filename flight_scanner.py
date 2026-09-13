@@ -64,6 +64,38 @@ class FlightLookupError(RuntimeError):
     """Raised when Google Flights cannot be reached for a requested route."""
 
 
+def _duration_minutes(value: Any) -> float:
+    """Convert values such as ``22h 15m`` into minutes for stable ranking."""
+    if not isinstance(value, str):
+        return float("inf")
+    hours = 0
+    minutes = 0
+    for part in value.lower().split():
+        try:
+            if part.endswith("h"):
+                hours = int(part[:-1])
+            elif part.endswith("m"):
+                minutes = int(part[:-1])
+        except ValueError:
+            return float("inf")
+    return (hours * 60) + minutes
+
+
+def _fare_sort_key(deal: Dict[str, Any]) -> Tuple[Any, ...]:
+    """Rank fares by price, then convenience, then stable text fields."""
+    return (
+        float(deal.get("price", float("inf"))),
+        int(deal.get("stops", 999)),
+        _duration_minutes(deal.get("total_journey_duration")),
+        str(deal.get("airline", "")),
+        str(deal.get("origin", "")),
+        str(deal.get("destination", "")),
+        str(deal.get("departure_date", "")),
+        str(deal.get("return_date", "")),
+        str(deal.get("layover_summary", "")),
+    )
+
+
 def _drop_unpriced_flight_groups(payload: List[Any]) -> int:
     """Remove Google result groups that do not contain a numeric fare."""
     groups = payload[3][0]
@@ -345,7 +377,8 @@ def scan_flights(
     max_stops: Optional[int] = None,
     date_pairs: Optional[List[Tuple[str, str]]] = None,
     trip_durations_days: Optional[List[int]] = None,
-    delay_between_requests: float = 1.0
+    delay_between_requests: float = 1.0,
+    source_errors: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Main entrypoint to sweep Google Flights for deals across origins and destinations.
@@ -409,11 +442,21 @@ def scan_flights(
                     successful_lookups += 1
                 except FlightLookupError as error:
                     lookup_errors.append(str(error))
+                    if source_errors is not None:
+                        source_errors.append({
+                            "component": "cash_flights",
+                            "status": "unavailable",
+                            "origin": origin,
+                            "destination": dest,
+                            "departure_date": dep_date,
+                            "return_date": ret_date,
+                            "message": str(error),
+                        })
                     print(f"⚠️ {error}")
                     continue
                 if deals:
                     # Sort deals by price and keep cheapest 2 per date window
-                    deals = sorted(deals, key=lambda x: x["price"])
+                    deals = sorted(deals, key=_fare_sort_key)
                     all_deals.extend(deals[:2])
 
                 time.sleep(delay_between_requests)
@@ -429,7 +472,7 @@ def scan_flights(
     # Deduplicate and sort by price
     unique_deals = []
     seen = set()
-    for d in sorted(all_deals, key=lambda x: x["price"]):
+    for d in sorted(all_deals, key=_fare_sort_key):
         key = (d["origin"], d["destination"], d["departure_date"], d["return_date"], d["price"], d["airline"])
         if key not in seen:
             seen.add(key)
