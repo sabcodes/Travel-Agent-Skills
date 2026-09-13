@@ -1,7 +1,10 @@
 import unittest
+import warnings
 from unittest.mock import Mock, patch
 
-from feed_monitor import _compute_relevance_score, _fetch_feed_content, _has_deal_intent, _matched_card_issuers, _normalise_link, detect_transfer_bonus, extract_bonus_percentage
+from feedparser.util import FeedParserDict
+
+from feed_monitor import _compute_relevance_score, _fetch_feed_content, _has_deal_intent, _matched_card_issuers, _normalise_link, _parse_published_date, detect_transfer_bonus, extract_bonus_percentage
 
 
 class DealQualityTests(unittest.TestCase):
@@ -40,6 +43,16 @@ class DealQualityTests(unittest.TestCase):
         browser_client.get.return_value = response
         self.assertEqual(_fetch_feed_content(session, "https://example.com/feed"), b"<rss/>")
         browser_client.get.assert_called_once()
+
+    def test_published_date_does_not_probe_deprecated_updated_alias(self):
+        entry = FeedParserDict({
+            "published": "Sun, 13 Sep 2026 12:00:00 +0000",
+            "published_parsed": (2026, 9, 13, 12, 0, 0, 6, 256, 0),
+        })
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            published = _parse_published_date(entry)
+        self.assertEqual(published.isoformat(), "2026-09-13T12:00:00+00:00")
 
 
 if __name__ == "__main__":

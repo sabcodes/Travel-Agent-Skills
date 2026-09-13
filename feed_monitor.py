@@ -165,12 +165,18 @@ def _fetch_feed_content(session: requests.Session, url: str) -> bytes:
 
 def _parse_published_date(entry) -> Optional[datetime]:
     """Attempts to parse the published/updated date from a feed entry into a timezone-aware datetime."""
-    date_str = getattr(entry, "published", getattr(entry, "updated", None))
+    if isinstance(entry, dict):
+        date_str = entry.get("published") or entry.get("updated")
+    else:
+        date_str = getattr(entry, "published", None) or getattr(entry, "updated", None)
     if not date_str:
         return None
 
     # feedparser provides parsed time tuples
-    parsed_time = getattr(entry, "published_parsed", getattr(entry, "updated_parsed", None))
+    if isinstance(entry, dict):
+        parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+    else:
+        parsed_time = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     if parsed_time:
         try:
             # struct_time -> datetime (treat as UTC if no tz info)

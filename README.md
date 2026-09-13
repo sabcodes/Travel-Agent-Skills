@@ -1,6 +1,6 @@
-# Flight, Stay & Card Deal Tracker
+# Flight, Award, Stay & Card Deal Tracker
 
-Automated, login-free tracker and reusable skill for cheap cash flights from any source airport, public Airbnb stays, and public Chase, Amex, and Capital One deals/transfer bonuses. Its checked-in defaults remain tailored to **SFO** and **SJC**, while every user can choose their own airports and destinations.
+Automated, login-free tracker and reusable skill for cheap cash flights, publicly reported award-flight opportunities, public Airbnb stays, and public Chase, Amex, and Capital One deals/transfer bonuses. Its checked-in defaults remain tailored to **SFO** and **SJC**, while every user can choose their own airports and destinations.
 
 ---
 
@@ -24,6 +24,7 @@ Automated, login-free tracker and reusable skill for cheap cash flights from any
   - Max stops filter (`--max-stops 0` for nonstop, `--max-stops 1` for max 1 layover)
 - **Winter Travel Windows**: Sweeps representative date windows across **November 2026**, **December 2026**, and **January 2027**, or generates departures across any custom date range.
 - **Public Feed Monitoring**: Tracks public Chase, American Express Membership Rewards, and Capital One deals and transfer bonuses. The scanner retries publishers that reject standard Python HTTP clients with the bundled browser-compatible client.
+- **Free Award-Deal Radar**: Reads public travel-news feeds, extracts stated routes, months, cabins, points, taxes, and loyalty programs, then ranks reports against the selected travel scope. These are attributed leads—not guaranteed live award inventory—and every result includes a verification link.
 - **Accommodation Search**: Chains each flight's dates into public Airbnb searches, returning up to three live listings beneath the nightly budget. If no flight matches, it still provides date-specific Google Hotels and Airbnb search links.
 - **Points Synergy Engine**: Flags when a cash flight deal can be booked with transferred Chase Ultimate Rewards points (United/Aeroplan for Star Alliance, British Airways/Iberia Avios for Oneworld, Flying Blue/Virgin for SkyTeam).
 - **Versatile Alerts**: Rich terminal tables and Discord/Slack webhook dispatching.
@@ -50,7 +51,7 @@ playwright install chromium
 ## Usage
 
 ### 1. Default Combined Sweep
-Scans active card deals, the checked-in SFO/SJC winter presets, stays, and points synergy:
+Scans active card/transfer deals, reported award leads, the checked-in SFO/SJC winter presets, stays, and points synergy:
 ```bash
 .venv/bin/python main.py
 ```
@@ -98,18 +99,32 @@ cp config.json config.local.json
 .venv/bin/python main.py --config config.local.json
 ```
 
-### 5. Scan Chase, Amex, and Capital One Deals Only
+### 5. Scan Reported Award-Flight Deals Only
+
+```bash
+# All eight checked-in regions for November 2026 through January 2027
+.venv/bin/python main.py --award-deals --origin SFO,SJC --months 2026-11,2026-12,2027-01
+
+# One configured region
+.venv/bin/python main.py --award-deals --dest jamaica --months 2026-11,2026-12,2027-01 --json
+```
+
+The award radar consumes public RSS/Atom metadata from configured publishers such as Frequent Miler, One Mile at a Time, View from the Wing, and AwardWallet Blog. It does not log in to loyalty accounts or scrape private award-search endpoints. A result means that a publisher reported an opportunity; points prices and seats can disappear, so verify on the linked loyalty program before transferring points. “No matching reported leads” does not mean that no award seats exist.
+
+The checked-in configuration contains Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, and Maui—eleven airport records across eight regions. Dhaka is not included.
+
+### 6. Scan Chase, Amex, and Capital One Deals Only
 ```bash
 .venv/bin/python main.py --deals
 ```
 
-### 6. Search Hotels and Airbnb
+### 7. Search Hotels and Airbnb
 ```bash
 # Scans matching flights, then attaches the top Airbnb stays under budget
 .venv/bin/python main.py --flights --stays --dest cancun --dates 2026-11-13:2026-11-20 --adults 4 --max-nightly-price 250
 ```
 
-`--stays` is login-free and uses public Airbnb result cards. Availability, fees, and taxes can change before booking; verify the final price at Airbnb. A regular run with no `--deals` or `--flights` flags also includes this flight-to-stay handoff.
+`--stays` is login-free and uses public Airbnb result cards. Availability, fees, and taxes can change before booking; verify the final price at Airbnb. A regular run with no primary scan flag also includes this flight-to-stay handoff.
 
 Every stay includes its room type, bedrooms, beds, bathrooms, and approximate map coordinates when the public result card supplies them. Add `--stay-details` to enrich only the selected stays with amenities, photos, house rules, review scores, recent reviews, capacity, and public description when available:
 
@@ -117,7 +132,7 @@ Every stay includes its room type, bedrooms, beds, bathrooms, and approximate ma
 .venv/bin/python main.py --flights --stays --stay-details --dest CUN --dates 2026-11-13:2026-11-20 --adults 4 --json
 ```
 
-### 7. Export Structured JSON
+### 8. Export Structured JSON
 ```bash
 .venv/bin/python main.py --flights --dest costa_rica --json
 ```
@@ -134,9 +149,11 @@ Edit `config.json` and set `"webhook_url"` to your Discord webhook URL:
 ```
 When configured, alerts will be formatted with duration, layover summaries, and booking links, and posted directly to your channel. If blank, alerts display in the terminal.
 
+Slack incoming webhooks are detected automatically. For Telegram, provide a Bot API `sendMessage` URL with the destination chat in its query string through `WEBHOOK_URL`, for example `https://api.telegram.org/bot<token>/sendMessage?chat_id=<chat-id>`; keep it out of tracked configuration.
+
 ## Security
 
-The tracked `config.json` deliberately contains no credentials. Keep `webhook_url` blank and provide a private notification endpoint through the local `WEBHOOK_URL` environment variable instead. Never commit `.env`, `config.local.json`, credentials, private keys, or API tokens; these paths are ignored by Git.
+The tracked `config.json` deliberately contains no credentials. Keep `webhook_url` blank and provide a private notification endpoint through the local `WEBHOOK_URL` environment variable instead. Never commit `.env`, `config.local.json`, credentials, private keys, or API tokens; these paths are ignored by Git. The award radar is a research assistant only: it never buys, sells, holds, transfers, or books tickets and does not use automated logins, private APIs, CAPTCHA bypasses, proxies, or anti-bot evasion.
 
 ---
 

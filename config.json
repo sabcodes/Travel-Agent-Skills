@@ -26,6 +26,12 @@
       "max_price": 550
     },
     {
+      "region": "puerto_rico",
+      "display_name": "Aguadilla, Puerto Rico",
+      "code": "BQN",
+      "max_price": 550
+    },
+    {
       "region": "costa_rica",
       "display_name": "San José, Costa Rica",
       "code": "SJO",
@@ -71,6 +77,27 @@
   },
   "target_months": ["2026-11", "2026-12", "2027-01"],
   "default_trip_durations_days": [6, 7],
+  "award_deal_feeds": [
+    {
+      "name": "Frequent Miler",
+      "url": "https://frequentmiler.com/feed/"
+    },
+    {
+      "name": "One Mile at a Time",
+      "url": "https://onemileatatime.com/feed/"
+    },
+    {
+      "name": "View from the Wing",
+      "url": "https://viewfromthewing.com/feed/"
+    },
+    {
+      "name": "AwardWallet Blog",
+      "url": "https://awardwallet.com/blog/feed/"
+    }
+  ],
+  "award_deal_max_age_days": 120,
+  "award_deal_min_score": 35,
+  "include_general_award_sales": false,
   "rss_feeds": [
     "https://www.doctorofcredit.com/?s=Chase&feed=rss2",
     "https://www.doctorofcredit.com/?s=American+Express&feed=rss2",

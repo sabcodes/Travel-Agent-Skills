@@ -1,11 +1,32 @@
 import json
 import requests
 from typing import List, Dict, Any, Optional
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
 console = Console()
+
+
+def _notification_request(webhook_url: str, message: str):
+    """Return the provider-specific endpoint and JSON payload for a message."""
+    parsed = urlsplit(webhook_url)
+    host = (parsed.hostname or "").lower()
+    if host.endswith("slack.com"):
+        return webhook_url, {"text": message}
+    if host == "api.telegram.org":
+        chat_id = parse_qs(parsed.query).get("chat_id", [None])[0]
+        if not chat_id:
+            raise ValueError("Telegram webhook URLs must include ?chat_id=YOUR_CHAT_ID")
+        endpoint = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        return endpoint, {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+    return webhook_url, {"content": message}
+
+
+def _post_message(webhook_url: str, message: str):
+    endpoint, payload = _notification_request(webhook_url, message)
+    requests.post(endpoint, json=payload, timeout=10)
 
 def format_terminal_deals(deals: List[Dict[str, Any]]):
     """Prints credit card and transfer bonus deals in a formatted table."""
@@ -29,6 +50,34 @@ def format_terminal_deals(deals: List[Dict[str, Any]]):
             d.get("link", "")
         )
     console.print(table)
+
+
+def format_terminal_award_deals(deals: List[Dict[str, Any]]):
+    """Print public award reports without implying that inventory is still live."""
+    if not deals:
+        console.print("[dim]No matching reported award leads. This does not mean no award seats exist.[/dim]")
+        return
+
+    table = Table(title="🎟️ Reported Award Leads — Verify live availability", header_style="bold cyan")
+    table.add_column("Reported lead", style="white", width=32)
+    table.add_column("Award", style="yellow", width=12, min_width=10, no_wrap=True)
+    table.add_column("When / Source / Verify", style="cyan", width=24, overflow="fold")
+
+    for deal in deals:
+        origins = ",".join(deal.get("origins", []))
+        destinations = ",".join(deal.get("destinations", []))
+        regions = ", ".join(region.replace("_", " ").title() for region in deal.get("matched_regions", []))
+        route = f"{origins} ➔ {destinations}" if origins and destinations else regions or destinations or "General sale"
+        points = f"{deal['points']:,}" if deal.get("points") is not None else "Not stated"
+        months = ", ".join(deal.get("travel_months", [])) or "Dates not stated"
+        cabin = deal.get("cabin") or "cabin not stated"
+        table.add_row(
+            f"{deal.get('title', 'Award opportunity')}\n[green]{route} · {deal.get('match_level', 'general-sale')} · score {deal.get('confidence_score', 0)}[/green]",
+            f"{points}\n{cabin}",
+            f"{months}\n{deal.get('source', 'Unknown')}\n{deal.get('source_url', '')}",
+        )
+    console.print(table)
+    console.print("[bold yellow]Reported award lead — verify live availability with the loyalty program before transferring points.[/bold yellow]")
 
 def format_terminal_flights(flights: List[Dict[str, Any]]):
     """Prints flight deals in a clean formatted table."""
@@ -105,11 +154,14 @@ def send_alert(webhook_url: str, title: str, details: List[Dict[str, Any]]):
         return
 
     is_package_alert = bool(details and "flight" in details[0])
+    is_award_alert = bool(details and details[0].get("availability_status") == "reported")
 
     # If no valid webhook URL is provided, display in terminal
     if not webhook_url or webhook_url.strip() in ("", "YOUR_WEBHOOK_URL_HERE"):
         if is_package_alert:
             format_terminal_packages(details)
+        elif is_award_alert:
+            format_terminal_award_deals(details)
         elif any("price" in item for item in details):
             format_terminal_flights(details)
         else:
@@ -126,6 +178,7 @@ def send_alert(webhook_url: str, title: str, details: List[Dict[str, Any]]):
             stays = item.get("stays", [])
             if stays:
                 line += " | 🏠 " + "; ".join(f"{stay.get('name', 'Airbnb stay')} ${stay.get('nightly_rate', 0):.0f}/night" for stay in stays)
+            lines.append(line)
         elif "price" in item:
             origin = item.get("origin", "Origin")
             dest = item.get("destination", "")
@@ -143,6 +196,16 @@ def send_alert(webhook_url: str, title: str, details: List[Dict[str, Any]]):
             if item.get("has_transfer_bonus"):
                 line += " 🌟 *Active Chase Transfer Bonus Available!*"
             lines.append(line)
+        elif item.get("availability_status") == "reported":
+            source_url = item.get("source_url", "")
+            title_text = item.get("title", "Reported award opportunity")
+            linked_title = f"[{title_text}]({source_url})" if source_url else title_text
+            line = f"• **Reported award lead — verify live availability:** {linked_title}"
+            if item.get("points") is not None:
+                line += f" | {item['points']:,} points/miles"
+            if item.get("matching_transfer_deals"):
+                line += " | matching transfer bonus reported"
+            lines.append(line)
         else:
             lines.append(f"• [{item['title']}]({item['link']})")
 
@@ -151,7 +214,7 @@ def send_alert(webhook_url: str, title: str, details: List[Dict[str, Any]]):
     for line in lines:
         if len(chunk) + len(line) + 2 > 1900:
             try:
-                requests.post(webhook_url, json={"content": chunk}, timeout=10)
+                _post_message(webhook_url, chunk)
             except Exception as e:
                 print(f"Error posting to webhook: {e}")
             chunk = header
@@ -159,7 +222,7 @@ def send_alert(webhook_url: str, title: str, details: List[Dict[str, Any]]):
 
     if chunk != header:
         try:
-            requests.post(webhook_url, json={"content": chunk}, timeout=10)
+            _post_message(webhook_url, chunk)
         except Exception as e:
             print(f"Error posting to webhook: {e}")
 
