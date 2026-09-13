@@ -135,6 +135,10 @@ Every flight deal extracted contains full duration and stopover metrics:
 
 - This tool helps users research free travel deals. It never buys, sells, holds, transfers, or books tickets.
 - Use public RSS/Atom metadata and attributed links only. Do not automate loyalty logins, private APIs, CAPTCHA handling, proxies, or anti-bot evasion.
+- Identify the tool as `TravelAgentDealTracker` and check the source's published robots policy before fetching. A disallowed path is `blocked`; do not fetch or work around it.
+- A browser-compatible HTTP/TLS client is allowed for one retry only after a transport or TLS failure on an otherwise permitted public endpoint. Never use it to retry or disguise an HTTP 401 or 403 response.
+- Treat HTTP 401/403 as `blocked` and HTTP 429 as `rate-limited`. Preserve `Retry-After` when supplied and wait until a later eligible run; do not hammer the source. Treat other source failures as `unavailable`.
+- Keep `blocked`, `rate-limited`, and `unavailable` distinct from “no matching reported leads” in user-facing results.
 - Never invent missing routes, months, cabins, points, taxes, seats, or programs.
 - Treat article and feed results as time-sensitive leads. Verify live inventory with the named loyalty program before recommending a points transfer.
 - The checked-in scope is Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, and Maui. Dhaka/DAC is not a fallback destination.

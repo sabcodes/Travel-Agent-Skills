@@ -23,7 +23,7 @@ Automated, login-free tracker and reusable skill for cheap cash flights, publicl
   - In-air flight duration vs. total door-to-door elapsed journey duration
   - Max stops filter (`--max-stops 0` for nonstop, `--max-stops 1` for max 1 layover)
 - **Winter Travel Windows**: Sweeps representative date windows across **November 2026**, **December 2026**, and **January 2027**, or generates departures across any custom date range.
-- **Public Feed Monitoring**: Tracks public Chase, American Express Membership Rewards, and Capital One deals and transfer bonuses. The scanner retries publishers that reject standard Python HTTP clients with the bundled browser-compatible client.
+- **Public Feed Monitoring**: Tracks public Chase, American Express Membership Rewards, and Capital One deals and transfer bonuses. The scanner uses an identified feed-reader user agent, respects robots rules, and uses the bundled browser-compatible TLS client only after a transport failure—not after an HTTP denial.
 - **Free Award-Deal Radar**: Reads public travel-news feeds, extracts stated routes, months, cabins, points, taxes, and loyalty programs, then ranks reports against the selected travel scope. These are attributed leads—not guaranteed live award inventory—and every result includes a verification link.
 - **Accommodation Search**: Chains each flight's dates into public Airbnb searches, returning up to three live listings beneath the nightly budget. If no flight matches, it still provides date-specific Google Hotels and Airbnb search links.
 - **Points Synergy Engine**: Flags when a cash flight deal can be booked with transferred Chase Ultimate Rewards points (United/Aeroplan for Star Alliance, British Airways/Iberia Avios for Oneworld, Flying Blue/Virgin for SkyTeam).
@@ -109,7 +109,7 @@ cp config.json config.local.json
 .venv/bin/python main.py --award-deals --dest jamaica --months 2026-11,2026-12,2027-01 --json
 ```
 
-The award radar consumes public RSS/Atom metadata from configured publishers such as Frequent Miler, One Mile at a Time, View from the Wing, and AwardWallet Blog. It does not log in to loyalty accounts or scrape private award-search endpoints. A result means that a publisher reported an opportunity; points prices and seats can disappear, so verify on the linked loyalty program before transferring points. “No matching reported leads” does not mean that no award seats exist.
+The award radar consumes public RSS/Atom metadata from configured publishers such as Frequent Miler, One Mile at a Time, View from the Wing, and AwardWallet Blog. It does not log in to loyalty accounts or scrape private award-search endpoints. It checks each publisher's robots policy before fetching a feed. A TLS or transport failure may receive one compatibility retry; 401/403 responses and disallowed paths are reported as blocked, while 429 responses are reported as rate-limited with any `Retry-After` value preserved. These access states are never presented as an empty search. A result means that a publisher reported an opportunity; points prices and seats can disappear, so verify on the linked loyalty program before transferring points. “No matching reported leads” does not mean that no award seats exist.
 
 The checked-in configuration contains Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, and Maui—eleven airport records across eight regions. Dhaka is not included.
 

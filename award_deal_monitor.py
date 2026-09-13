@@ -9,8 +9,9 @@ import feedparser
 import requests
 
 from feed_monitor import (
+    FeedAccessError,
     USER_AGENT,
-    _fetch_feed_content,
+    _fetch_public_feed,
     _is_title_blocklisted,
     _is_too_old,
     _normalise_link,
@@ -340,7 +341,7 @@ def fetch_award_deals(
     max_age_days = int(cfg.get("award_deal_max_age_days", 120))
     min_score = int(cfg.get("award_deal_min_score", 35))
     include_general = bool(cfg.get("include_general_award_sales", False))
-    fetch = fetch_content or _fetch_feed_content
+    fetch = fetch_content or _fetch_public_feed
 
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT})
@@ -385,6 +386,8 @@ def fetch_award_deals(
                 leads.append(lead)
                 matched_count += 1
             print(f"Award feed [{source}]: checked {len(parsed.entries)} entries, matched {matched_count}")
+        except FeedAccessError as error:
+            print(f"Award feed {error.status} [{source}]: {error}")
         except Exception as error:
             print(f"Award feed error [{source}]: {error}")
 

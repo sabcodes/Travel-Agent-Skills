@@ -4,10 +4,14 @@ import requests
 import feedparser
 from html import unescape
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.robotparser import RobotFileParser
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+ROBOTS_USER_AGENT = "TravelAgentDealTracker"
+USER_AGENT = f"{ROBOTS_USER_AGENT}/1.0 (+personal-use public-feed reader)"
+FEED_ACCEPT = "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5"
+_ROBOTS_CACHE: Dict[str, Optional[RobotFileParser]] = {}
 
 try:
     # Several public publishers block the default Python requests TLS signature.
@@ -16,6 +20,16 @@ try:
     from curl_cffi import requests as browser_requests
 except ImportError:  # pragma: no cover - normal requests remains a valid fallback
     browser_requests = None
+
+
+class FeedAccessError(RuntimeError):
+    """A source access state that must not be mistaken for an empty feed."""
+
+    def __init__(self, status: str, url: str, message: str, retry_after: Optional[str] = None):
+        super().__init__(message)
+        self.status = status
+        self.url = url
+        self.retry_after = retry_after
 
 AIRLINE_PARTNERS = {
     "united": ["United Airlines", "MileagePlus", "Star Alliance"],
@@ -144,23 +158,98 @@ def _matched_card_issuers(title: str) -> List[str]:
     return [issuer for issuer, keywords in CARD_ISSUER_KEYWORDS.items() if any(keyword in title_lower for keyword in keywords)]
 
 
+def _response_access_error(response: Any, url: str, resource: str) -> FeedAccessError:
+    status_code = int(response.status_code)
+    headers = getattr(response, "headers", {}) or {}
+    if status_code in {401, 403}:
+        return FeedAccessError("blocked", url, f"{resource} access blocked with HTTP {status_code}")
+    if status_code == 429:
+        retry_after = headers.get("Retry-After")
+        suffix = f"; retry after {retry_after}" if retry_after else ""
+        return FeedAccessError(
+            "rate-limited",
+            url,
+            f"{resource} rate-limited with HTTP 429{suffix}",
+            retry_after=retry_after,
+        )
+    return FeedAccessError("unavailable", url, f"{resource} unavailable with HTTP {status_code}")
+
+
+def _request_with_transport_fallback(
+    session: requests.Session,
+    url: str,
+    accept: str,
+) -> Any:
+    """Retry once with a compatible TLS stack only after a transport failure."""
+    try:
+        return session.get(url, timeout=12)
+    except requests.RequestException as primary_error:
+        if browser_requests is None:
+            raise FeedAccessError(
+                "unavailable", url, f"transport failure: {primary_error}"
+            ) from primary_error
+
+        try:
+            return browser_requests.get(
+                url,
+                headers={"User-Agent": USER_AGENT, "Accept": accept},
+                impersonate="chrome",
+                timeout=20,
+            )
+        except Exception as fallback_error:
+            raise FeedAccessError(
+                "unavailable", url, f"transport failure after compatibility retry: {fallback_error}"
+            ) from fallback_error
+
+
 def _fetch_feed_content(session: requests.Session, url: str) -> bytes:
-    """Fetch an RSS document, retrying with a browser-compatible TLS client."""
-    response = session.get(url, timeout=12)
+    """Fetch a feed without retrying explicit HTTP denials or rate limits."""
+    response = _request_with_transport_fallback(session, url, FEED_ACCEPT)
     if response.status_code == 200:
         return response.content
+    raise _response_access_error(response, url, "feed")
 
-    if browser_requests is None:
-        response.raise_for_status()
 
-    browser_response = browser_requests.get(
-        url,
-        headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5"},
-        impersonate="chrome",
-        timeout=20,
-    )
-    browser_response.raise_for_status()
-    return browser_response.content
+def _robots_allows(
+    session: requests.Session,
+    url: str,
+    cache: Optional[Dict[str, Optional[RobotFileParser]]] = None,
+) -> bool:
+    """Return whether the source's public robots policy permits this feed URL."""
+    parsed_url = urlsplit(url)
+    if not parsed_url.scheme or not parsed_url.netloc:
+        raise FeedAccessError("unavailable", url, "feed URL has no valid origin")
+
+    origin = f"{parsed_url.scheme.lower()}://{parsed_url.netloc.lower()}"
+    policies = _ROBOTS_CACHE if cache is None else cache
+    if origin in policies:
+        policy = policies[origin]
+        return policy is None or policy.can_fetch(ROBOTS_USER_AGENT, url)
+
+    robots_url = f"{origin}/robots.txt"
+    response = _request_with_transport_fallback(session, robots_url, "text/plain, */*;q=0.1")
+    if response.status_code in {404, 410}:
+        policies[origin] = None
+        return True
+    if response.status_code != 200:
+        raise _response_access_error(response, robots_url, "robots.txt")
+
+    parser = RobotFileParser()
+    parser.set_url(robots_url)
+    parser.parse(response.text.splitlines())
+    policies[origin] = parser
+    return parser.can_fetch(ROBOTS_USER_AGENT, url)
+
+
+def _fetch_public_feed(
+    session: requests.Session,
+    url: str,
+    robots_cache: Optional[Dict[str, Optional[RobotFileParser]]] = None,
+) -> bytes:
+    """Fetch a public feed only when its published robots policy permits it."""
+    if not _robots_allows(session, url, cache=robots_cache):
+        raise FeedAccessError("blocked", url, "feed path is disallowed by robots.txt")
+    return _fetch_feed_content(session, url)
 
 
 def _parse_published_date(entry) -> Optional[datetime]:
@@ -265,7 +354,7 @@ def fetch_card_deals(config_path: str = "config.json") -> List[Dict[str, Any]]:
 
     for url in rss_feeds:
         try:
-            feed = feedparser.parse(_fetch_feed_content(session, url))
+            feed = feedparser.parse(_fetch_public_feed(session, url))
             if not feed.entries:
                 print(f"No current entries in RSS feed: {url}")
                 continue
@@ -341,6 +430,8 @@ def fetch_card_deals(config_path: str = "config.json") -> List[Dict[str, Any]]:
                     "published": getattr(entry, "published", getattr(entry, "updated", "N/A")),
                     "summary": clean_summary
                 })
+        except FeedAccessError as error:
+            print(f"Feed {error.status} [{url}]: {error}")
         except Exception as e:
             print(f"Error fetching feed {url}: {e}")
 

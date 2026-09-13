@@ -2,9 +2,22 @@ import unittest
 import warnings
 from unittest.mock import Mock, patch
 
+import requests
 from feedparser.util import FeedParserDict
 
-from feed_monitor import _compute_relevance_score, _fetch_feed_content, _has_deal_intent, _matched_card_issuers, _normalise_link, _parse_published_date, detect_transfer_bonus, extract_bonus_percentage
+from feed_monitor import (
+    FeedAccessError,
+    _compute_relevance_score,
+    _fetch_feed_content,
+    _fetch_public_feed,
+    _has_deal_intent,
+    _matched_card_issuers,
+    _normalise_link,
+    _parse_published_date,
+    _robots_allows,
+    detect_transfer_bonus,
+    extract_bonus_percentage,
+)
 
 
 class DealQualityTests(unittest.TestCase):
@@ -36,13 +49,73 @@ class DealQualityTests(unittest.TestCase):
         self.assertEqual(_matched_card_issuers("Current Amex Offers"), ["American Express"])
 
     @patch("feed_monitor.browser_requests")
-    def test_uses_browser_client_after_http_rejection(self, browser_client):
+    def test_does_not_retry_explicit_http_denial(self, browser_client):
         session = Mock()
-        session.get.return_value = Mock(status_code=403)
-        response = Mock(content=b"<rss/>")
-        browser_client.get.return_value = response
+        session.get.return_value = Mock(status_code=403, headers={})
+
+        with self.assertRaises(FeedAccessError) as caught:
+            _fetch_feed_content(session, "https://example.com/feed")
+
+        self.assertEqual(caught.exception.status, "blocked")
+        browser_client.get.assert_not_called()
+
+    @patch("feed_monitor.browser_requests")
+    def test_uses_browser_client_after_transport_failure(self, browser_client):
+        session = Mock()
+        session.get.side_effect = requests.exceptions.SSLError("TLS handshake failed")
+        browser_client.get.return_value = Mock(status_code=200, content=b"<rss/>", headers={})
+
         self.assertEqual(_fetch_feed_content(session, "https://example.com/feed"), b"<rss/>")
         browser_client.get.assert_called_once()
+
+    @patch("feed_monitor.browser_requests")
+    def test_reports_rate_limit_without_immediate_retry(self, browser_client):
+        session = Mock()
+        session.get.return_value = Mock(status_code=429, headers={"Retry-After": "60"})
+
+        with self.assertRaises(FeedAccessError) as caught:
+            _fetch_feed_content(session, "https://example.com/feed")
+
+        self.assertEqual(caught.exception.status, "rate-limited")
+        self.assertEqual(caught.exception.retry_after, "60")
+        browser_client.get.assert_not_called()
+
+    def test_robots_allows_public_feed(self):
+        session = Mock()
+        session.get.return_value = Mock(
+            status_code=200,
+            text="User-agent: *\nAllow: /feed/\n",
+            headers={},
+        )
+
+        self.assertTrue(_robots_allows(session, "https://example.com/feed/award", cache={}))
+
+    def test_robots_disallow_stops_before_feed_fetch(self):
+        session = Mock()
+        session.get.return_value = Mock(
+            status_code=200,
+            text="User-agent: *\nDisallow: /private/\n",
+            headers={},
+        )
+
+        with self.assertRaises(FeedAccessError) as caught:
+            _fetch_public_feed(session, "https://example.com/private/award.xml", robots_cache={})
+
+        self.assertEqual(caught.exception.status, "blocked")
+        self.assertEqual(session.get.call_count, 1)
+
+    def test_cached_robots_policy_is_rechecked_for_each_path(self):
+        session = Mock()
+        session.get.return_value = Mock(
+            status_code=200,
+            text="User-agent: *\nAllow: /feed/\nDisallow: /private/\n",
+            headers={},
+        )
+        cache = {}
+
+        self.assertTrue(_robots_allows(session, "https://example.com/feed/award", cache=cache))
+        self.assertFalse(_robots_allows(session, "https://example.com/private/award", cache=cache))
+        self.assertEqual(session.get.call_count, 1)
 
     def test_published_date_does_not_probe_deprecated_updated_alias(self):
         entry = FeedParserDict({
