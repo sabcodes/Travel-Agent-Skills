@@ -105,22 +105,70 @@ Provider failures appear in the JSON `source_errors` array instead of being repo
 
 ## Included Destination Presets
 
-The combined tracker and public award/stay configuration retain these 12 regions and 15 airport records. The flight-only pool in `flight_destinations.json` contains all 50 requested locations:
+The flight-only CLI currently includes **50 destination presets** covering **53 airport codes**, defined in [flight_destinations.json](flight_destinations.json). Use a preset name or its id with `--dest`, comma-separated ids for a subset, or `--dest all` for the entire pool. Selecting an IATA code searches that airport only.
 
-- Cancun (`CUN`)
-- Jamaica (`MBJ`, `KIN`)
-- Puerto Rico (`SJU`, `BQN`)
-- Costa Rica (`SJO`, `LIR`)
-- Brazil (`GIG`)
-- Peru (`LIM`)
-- Guatemala Pacific Coast (`GUA`, with Monterrico stay searches)
-- Maui (`OGG`)
-- Belize (`BZE`)
-- Mexico City (`MEX`)
-- St. Lucia (`UVF`)
-- Roatán and the Bay Islands (`RTB`)
+Presets with multiple airports compare them within one destination row. Gateway notes identify onward transport that is excluded from airfare.
 
-These presets are examples, not a restriction. Dhaka (`DAC`) is intentionally not configured.
+| Location | CLI preset id | Arrival airport(s) | Gateway / onward travel note |
+|---|---|---|---|
+| Aguadilla | `aguadilla` | `BQN` | — |
+| Anguilla | `anguilla` | `AXA` | — |
+| Antigua | `antigua` | `ANU` | — |
+| Aruba | `aruba` | `AUA` | — |
+| Barbados | `barbados` | `BGI` | — |
+| Belize City | `belize` | `BZE` | — |
+| Bocas del Toro | `bocas_del_toro` | `BOC` | Through-fare search only; separate domestic tickets and PTY–PAC transfers are excluded. |
+| Bonaire | `bonaire` | `BON` | — |
+| Cancun | `cancun` | `CUN` | — |
+| Cape Town | `cape_town` | `CPT` | — |
+| Cape Verde (Sal) | `cape_verde_sal` | `SID` | — |
+| Cartagena | `cartagena` | `CTG` | — |
+| Curaçao | `curacao` | `CUR` | — |
+| Dominica | `dominica` | `DOM` | — |
+| Exuma | `exuma` | `GGT` | Great Exuma airfare; transport to other Exuma islands is excluded. |
+| Grenada | `grenada` | `GND` | — |
+| Guatemala Pacific Coast | `guatemala` | `GUA` | Ground transfer from Guatemala City to the Pacific coast is excluded. |
+| Harbour Island | `harbour_island` | `ELH` | North Eleuthera airfare only; ground transfer and ferry are excluded. |
+| Kauai | `kauai` | `LIH` | — |
+| Key West | `key_west` | `EYW` | — |
+| Kingston | `kingston` | `KIN` | — |
+| Liberia, Costa Rica | `liberia_cr` | `LIR` | — |
+| Lima | `lima` | `LIM` | — |
+| Lisbon | `lisbon` | `LIS` | — |
+| Malta | `malta` | `MLA` | — |
+| Marrakech | `marrakech` | `RAK` | — |
+| Maui | `maui` | `OGG` | — |
+| Mexico City | `mexico_city` | `MEX` | — |
+| Montego Bay | `montego_bay` | `MBJ` | — |
+| Panama City | `panama_city` | `PTY` | — |
+| Paris | `paris` | `CDG`, `ORY` | — |
+| Puerto Vallarta | `puerto_vallarta` | `PVR` | — |
+| Punta Cana | `punta_cana` | `PUJ` | — |
+| Rio de Janeiro | `rio_de_janeiro` | `GIG` | — |
+| Roatán & Bay Islands | `roatan_bay_islands` | `RTB` | — |
+| Rome | `rome` | `FCO` | — |
+| San José, Costa Rica | `san_jose_cr` | `SJO` | — |
+| San Juan | `san_juan` | `SJU` | — |
+| Sanibel Island | `sanibel_island` | `RSW` | Fort Myers airfare only; ground transfer to Sanibel is excluded. |
+| Seoul | `seoul` | `ICN` | — |
+| Siquijor (via Cebu) | `siquijor_via_cebu` | `CEB` | Cebu airfare only; onward sea and ground travel to Siquijor are excluded. |
+| St. John USVI | `st_john_usvi` | `STT` | St. Thomas airfare only; ground transfer and ferry to St. John are excluded. |
+| St. Kitts & Nevis | `st_kitts_nevis` | `SKB` | St. Kitts airfare only; onward ferry or flight to Nevis is excluded. |
+| St. Lucia | `saint_lucia` | `UVF` | — |
+| Stockholm | `stockholm` | `ARN` | — |
+| Sydney | `sydney` | `SYD` | — |
+| Tenerife | `tenerife` | `TFS`, `TFN` | — |
+| Tokyo | `tokyo` | `HND`, `NRT` | — |
+| Turks & Caicos | `turks_caicos` | `PLS` | Fare covers Providenciales; onward travel to other islands is excluded. |
+| Zanzibar | `zanzibar` | `ZNZ` | — |
+
+List the current pool directly from the CLI:
+
+```bash
+.venv/bin/python flight_tools.py destinations
+```
+
+The combined tracker’s public award/stay presets remain the 12 regions and 15 airport records in [config.json](config.json): Cancun, Jamaica, Puerto Rico, Costa Rica, Brazil, Peru, Guatemala, Maui, Belize, Mexico City, St. Lucia, and Roatán/Bay Islands. Custom IATA airports work even when absent from either preset collection.
 
 ## Load the Skill in Codex
 

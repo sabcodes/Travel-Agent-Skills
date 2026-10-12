@@ -70,6 +70,8 @@ Append a record to `flight_destinations.json`, or pass an alternate file with `-
 
 Use a unique id and uppercase three-letter airports. Optional `aliases` add names; `gateway_note` describes unpriced onward travel. Multiple airports are compared within the destination's row. Validate the pool with `flight_tools.py destinations --pool PATH`. Keep it separate from award/stay configuration.
 
+Keep the [README preset table](../../../README.md#included-destination-presets) synchronized when changing the pool; use `flight_destinations.json` and the CLI as the authoritative location/airport mapping.
+
 ## Other travel lanes
 
 For public award reports, card/transfer offers, hotels, or BnBs, read [references/other-lanes.md](references/other-lanes.md). Existing workflows remain available; flight-only work uses `flight_tools.py`.
