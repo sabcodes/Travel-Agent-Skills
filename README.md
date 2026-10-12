@@ -4,6 +4,37 @@ A free, login-free research tool and Codex skill for comparing cash flights, pub
 
 The flight-only CLI defaults to **SFO**, with 50 selectable destinations. The combined tracker defaults to SFO/SJC. Both accept custom IATA airports.
 
+## Setup and Requirements
+
+Install these first:
+
+- **Python 3.14**, the tested runtime, with `pip` and `venv`: [Python downloads](https://www.python.org/downloads/).
+- **Git** to clone and update the project: [Git downloads](https://git-scm.com/downloads/).
+- An internet connection to install packages and fetch live fares. Filtering saved results works offline.
+
+The Python dependencies are listed in [requirements.txt](requirements.txt). The install command below downloads them automatically, including `fast-flights`, feed readers, and the libraries used by the combined tracker. Playwright is a Python dependency, but flight searches do not require downloading browser binaries. The CLI runs without travel-account credentials or an OpenAI API key; Codex is optional for using the agent skill.
+
+On macOS/Linux:
+
+```bash
+git clone https://github.com/sabcodes/Travel-Agent-Skills.git
+cd Travel-Agent-Skills
+python3.14 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+If you already have the repository, run the environment and package-install commands from its root. On Windows, create the environment with `py -3.14 -m venv .venv` and replace `.venv/bin/python` with `.venv\Scripts\python.exe` in the commands.
+
+Verify setup with a network-free search preview:
+
+```bash
+.venv/bin/python flight_tools.py --help
+.venv/bin/python flight_tools.py search --dest cancun,maui \
+  --start-date 2027-01-01 --end-date 2027-01-31 --dry-run --format table
+```
+
+Continue with the flight CLI below, or see [Load the Skill in Codex](#load-the-skill-in-codex) for agent setup.
+
 ## Flight-only CLI
 
 Run these commands from the repository root. No agent is needed to search, filter, or generate a comparison matrix.
@@ -90,24 +121,6 @@ The combined tracker and public award/stay configuration retain these 12 regions
 - Roatán and the Bay Islands (`RTB`)
 
 These presets are examples, not a restriction. Dhaka (`DAC`) is intentionally not configured.
-
-## Install the Local Tool
-
-From the repository root:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-No Playwright browser installation or private travel-account credential is required.
-
-Confirm the CLI is available:
-
-```bash
-.venv/bin/python main.py --help
-```
 
 ## Load the Skill in Codex
 

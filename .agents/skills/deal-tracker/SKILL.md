@@ -7,6 +7,8 @@ description: Search and compare cash flights with lite or deep date grids, analy
 
 Use the checked-in CLI for searches, date generation, filtering, and ranking. The agent translates requests into parameters and explains results. Run commands from this repository with `.venv/bin/python`.
 
+For first-time installation, follow [README setup and requirements](../../../README.md#setup-and-requirements) before running the CLI.
+
 ## Cash-flight workflow
 
 1. Translate requested airports, total travel window, trip lengths, search depth, and optional limits into a command. Named destinations restrict the search to those selections. Discover pool ids, names, airport alternatives, and gateway notes with `flight_tools.py destinations`.
