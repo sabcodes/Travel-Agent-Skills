@@ -32,7 +32,7 @@ class FlexibleDateTests(unittest.TestCase):
 
     def test_generates_requested_trip_lengths_inside_date_range(self):
         pairs = generate_date_pairs_between("2027-03-01", "2027-03-15", [4, 7], step_days=7)
-        self.assertEqual(pairs, [("2027-03-01", "2027-03-05"), ("2027-03-01", "2027-03-08"), ("2027-03-08", "2027-03-12"), ("2027-03-08", "2027-03-15")])
+        self.assertEqual(pairs, [("2027-03-01", "2027-03-04"), ("2027-03-01", "2027-03-07"), ("2027-03-08", "2027-03-11"), ("2027-03-08", "2027-03-14")])
 
     def test_rejects_an_invalid_date_range(self):
         with self.assertRaises(ValueError):
@@ -40,8 +40,8 @@ class FlexibleDateTests(unittest.TestCase):
 
     def test_monthly_searches_generate_each_requested_trip_duration(self):
         pairs = generate_target_date_pairs(["2026-11"], trip_durations_days=[6, 7])
-        self.assertEqual(len(pairs), 6)
-        self.assertEqual(pairs[:2], [("2026-11-06", "2026-11-12"), ("2026-11-06", "2026-11-13")])
+        self.assertEqual(len(pairs), 10)
+        self.assertEqual(pairs[:2], [("2026-11-01", "2026-11-06"), ("2026-11-01", "2026-11-07")])
 
 
 if __name__ == "__main__":

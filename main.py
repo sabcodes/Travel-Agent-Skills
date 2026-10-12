@@ -166,8 +166,8 @@ def parse_args():
     parser.add_argument("--dest", type=str, help="Comma-separated destinations or regions (e.g. cancun, jamaica, SJU, SJO)")
     parser.add_argument("--months", type=str, help="Comma-separated months (e.g. 2026-11,2026-12,2027-01)")
     parser.add_argument("--date-range", type=str, help="Flexible travel window START:END (e.g. 2027-03-01:2027-04-15)")
-    parser.add_argument("--trip-lengths", type=str, help="Trip lengths in days for --date-range or --months (e.g. 4,7,10)")
-    parser.add_argument("--date-step-days", type=int, default=7, help="Days between generated departures for --date-range")
+    parser.add_argument("--trip-lengths", type=str, help="Inclusive calendar days (6 means five nights) for --date-range or --months")
+    parser.add_argument("--date-step-days", type=int, default=5, help="Days between generated departures for --date-range")
     parser.add_argument("--max-price", type=float, help="Max cash round-trip price in USD")
     parser.add_argument("--max-stops", type=int, default=None, help="Maximum number of layovers / stops (e.g. 0 for nonstop, 1 for max 1 stop)")
     parser.add_argument("--max-nightly-price", type=float, help="Maximum nightly accommodation budget in USD")
@@ -177,10 +177,10 @@ def parse_args():
     parser.add_argument("--dates", type=str, help="Specific departure:return pair (e.g. 2026-11-13:2026-11-20)")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     parser.add_argument("--output", type=str, help="File path to save JSON output")
-    return parser.parse_args()
+    return parser, parser.parse_args()
 
 async def main():
-    args = parse_args()
+    parser, args = parse_args()
 
     # Named primary modes run only what was requested; no primary mode runs the full tracker.
     explicit_scan = args.deals or args.flights or args.award_deals
@@ -199,8 +199,8 @@ async def main():
     if args.trip_lengths:
         try:
             trip_lengths = [int(value.strip()) for value in args.trip_lengths.split(",")]
-            if not trip_lengths or any(length < 1 for length in trip_lengths):
-                raise ValueError("trip lengths must contain positive whole days")
+            if not trip_lengths or any(length < 2 for length in trip_lengths):
+                raise ValueError("round-trip lengths must be at least 2 inclusive days")
         except ValueError as error:
             parser.error(str(error))
 
@@ -217,7 +217,7 @@ async def main():
             parser.error("--date-range must use START:END")
         try:
             date_pairs = generate_date_pairs_between(
-                range_parts[0].strip(), range_parts[1].strip(), trip_lengths or [7], args.date_step_days,
+                range_parts[0].strip(), range_parts[1].strip(), trip_lengths or [6], args.date_step_days,
             )
         except ValueError as error:
             parser.error(str(error))

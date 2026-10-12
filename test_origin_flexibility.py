@@ -79,7 +79,7 @@ class OriginFlexibilityTests(unittest.TestCase):
             delay_between_requests=0,
         )
 
-        self.assertEqual([deal["airline"] for deal in deals], ["Bravo", "Alpha"])
+        self.assertEqual([deal["airline"] for deal in deals], ["Bravo", "Alpha", "Zulu"])
 
 
 if __name__ == "__main__":

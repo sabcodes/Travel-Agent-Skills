@@ -2,7 +2,61 @@
 
 A free, login-free research tool and Codex skill for comparing cash flights, public award-deal reports, card and transfer offers, Airbnb result cards, and hotel search links. It does not buy, sell, hold, or book travel.
 
-The checked-in defaults use **SFO** and **SJC**, but the CLI accepts other IATA origin and destination codes.
+The flight-only CLI defaults to **SFO**, with 50 selectable destinations. The combined tracker defaults to SFO/SJC. Both accept custom IATA airports.
+
+## Flight-only CLI
+
+Run these commands from the repository root. No agent is needed to search, filter, or generate a comparison matrix.
+
+```bash
+# View the destination pool (ids, names, airport alternatives, gateway notes)
+.venv/bin/python flight_tools.py destinations
+
+# Lite: one departure every five days, six inclusive calendar days per trip
+.venv/bin/python flight_tools.py search --origin SFO --dest cancun,maui \
+  --start-date 2027-01-01 --end-date 2027-01-31 --trip-lengths 6 \
+  --output /tmp/january-lite.json --format table
+
+# Preview all 50 destinations without making any requests
+.venv/bin/python flight_tools.py search --dest all \
+  --start-date 2027-01-01 --end-date 2027-01-31 --dry-run
+
+# Use weekly departures instead; any positive spacing is supported
+.venv/bin/python flight_tools.py search --dest cancun,maui \
+  --start-date 2027-01-01 --end-date 2027-01-31 --date-step-days 7
+
+# Deep: every departure day for each requested trip length; test two locations
+.venv/bin/python flight_tools.py search --mode deep --dest cancun,maui \
+  --start-date 2027-01-01 --end-date 2027-01-31 --trip-lengths 6 \
+  --output /tmp/january-deep.json --format table
+
+# Filter a saved snapshot without fetching fares again
+.venv/bin/python flight_tools.py filter --input /tmp/january-deep.json \
+  --max-price 500 --max-stops 1 --max-duration-hours 12 --max-layover-hours 4 \
+  --output /tmp/january-filtered.json --format table
+```
+
+`--dest` accepts `all`, one destination, comma-separated names/ids, or IATA codes. Named Tokyo, Paris, and Tenerife searches compare both configured airports. Selecting `NRT` searches only Narita. `--origin` accepts one or more airports. Lite defaults to a five-day step; deep uses a one-day step. Deep checks every valid departure for each explicit length, not arbitrary return dates.
+
+Trip lengths count **inclusive calendar days**: six days means Jan 1–6, not Jan 1–7. January lite windows are Jan 1–6, 6–11, 11–16, 16–21, 21–26, 26–31. The end date bounds the **return departure date**; the provider does not export the selected return itinerary or its final arrival date. Returns in February require an end date in February.
+
+Prices are USD economy round-trip quotes for **one adult**. `--adults` remains an accommodation option in the combined tracker. Flight searches have **no implicit price ceiling**: configured destination thresholds and the old $2,000 discovery ceiling do not exclude fares. Use `--max-price` when a ceiling is wanted.
+
+JSON is the default stdout format; progress goes to stderr. `--output` always saves structured JSON even when stdout is a table. Snapshots contain the query, timestamp, all provider-returned candidates, status for every airport/date pair, a destination/window matrix, and deterministic minima. Fares rank by price, stops, outbound elapsed time, airline, and stable itinerary fields. This retains all results exposed by the provider; it does not guarantee exhaustive airline inventory.
+
+The offline filter reads `raw_flight_deals`, so local price/duration filters can be relaxed later. A `--max-stops` restriction used during live search narrows the provider query in both directions; offline filtering cannot recover fares omitted by that query. Saved connection counts, layover waits, and durations describe **outbound travel only**. All fares are retained; there is no top-two truncation.
+
+Each matrix cell distinguishes `ok`, `partial`, `filtered_out`, `no_matching_fares`, `unavailable`, or `planned`. An unavailable source is never evidence of no flights. Any source error gives exit code 1 while still producing a snapshot; invalid input gives exit code 2. Successful and valid empty searches give exit code 0. For Bocas del Toro, an empty through-fare search does not rule out separate domestic tickets. Gateway notes flag unpriced onward travel.
+
+### Add a location
+
+Append a record to `flight_destinations.json`, or copy it and pass `--pool PATH`:
+
+```json
+{"id": "honolulu", "name": "Honolulu", "airports": ["HNL"]}
+```
+
+Use a unique id and uppercase three-letter airport codes. Optional `aliases` accept alternate names; optional `gateway_note` describes onward travel excluded from the fare. Multiple `airports` are searched independently and the matrix selects the cheapest qualifying airport. Validate the pool with `.venv/bin/python flight_tools.py destinations --pool PATH`. The flight pool is separate from the existing award/stay configuration.
 
 ## What It Searches
 
@@ -20,7 +74,7 @@ Provider failures appear in the JSON `source_errors` array instead of being repo
 
 ## Included Destination Presets
 
-The 12 configured regions contain 15 airport records:
+The combined tracker and public award/stay configuration retain these 12 regions and 15 airport records. The flight-only pool in `flight_destinations.json` contains all 50 requested locations:
 
 - Cancun (`CUN`)
 - Jamaica (`MBJ`, `KIN`)
@@ -77,7 +131,7 @@ $deal-tracker Compare flights and Airbnb stays for four adults in St. Lucia from
 ```
 
 ```text
-$deal-tracker Search all 12 configured destinations for seven-night trips in November, December, and January. Keep cash fares below each configured destination limit.
+$deal-tracker Search the flight destination pool for January trips lasting six calendar days. Use a lite five-day departure grid and save the comparison matrix.
 ```
 
 The skill translates the request into deterministic CLI arguments, runs the checked-in Python tools, and summarizes the structured result. The Python scripts are local workspace tools; this repository does not require an MCP server, Codex plugin, Booking.com credential, or OpenAI API key.
@@ -144,7 +198,7 @@ With no primary mode flag, the tracker runs cash flights, public award reports, 
   --date-range 2026-11-01:2027-01-31 --trip-lengths 4,7,10 --date-step-days 7
 ```
 
-For the best chance of finding the true minimum, follow a coarse flexible-date sweep with exact searches around promising departures.
+For flight-only research, use `flight_tools.py search`: choose lite for sampling or deep for every eligible departure. The legacy month/date-range trip lengths also use inclusive calendar days.
 
 ### Cash flights plus points research, without stays
 
@@ -262,6 +316,17 @@ Discord and Slack incoming webhooks are supported. For Telegram, use a Bot API `
 - The tracker does not automate loyalty logins, CAPTCHAs, proxies, private APIs, purchases, reservations, or ticket transfers.
 
 ## Test and Validate
+
+For major implementation stages and the final update, keep the README and project skill synchronized with the CLI, run the tests below, then scan the exact staged changes before committing. When a push is authorized, scan the resulting commit before pushing it.
+
+The locally installed `repo-security-gate` skill supplies the offline gate:
+
+```bash
+python3 "$HOME/.codex/skills/repo-security-gate/scripts/security-scan" check-staged
+python3 "$HOME/.codex/skills/repo-security-gate/scripts/security-scan" check-commit HEAD
+```
+
+The bundled gate checks credential patterns; supplement it with a personal-data check of staged files and commit metadata. Keep reports, generated fare snapshots, credentials, and local paths outside commits. A staged/commit scan does not establish that the entire repository history is clean.
 
 Run the complete unit suite:
 

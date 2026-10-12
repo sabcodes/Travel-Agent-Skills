@@ -1,0 +1,364 @@
+[
+  {
+    "id": "maui",
+    "name": "Maui",
+    "airports": [
+      "OGG"
+    ]
+  },
+  {
+    "id": "puerto_vallarta",
+    "name": "Puerto Vallarta",
+    "airports": [
+      "PVR"
+    ]
+  },
+  {
+    "id": "san_juan",
+    "name": "San Juan",
+    "airports": [
+      "SJU"
+    ]
+  },
+  {
+    "id": "san_jose_cr",
+    "name": "San José, Costa Rica",
+    "airports": [
+      "SJO"
+    ]
+  },
+  {
+    "id": "cancun",
+    "name": "Cancun",
+    "airports": [
+      "CUN"
+    ]
+  },
+  {
+    "id": "montego_bay",
+    "name": "Montego Bay",
+    "airports": [
+      "MBJ"
+    ]
+  },
+  {
+    "id": "kingston",
+    "name": "Kingston",
+    "airports": [
+      "KIN"
+    ]
+  },
+  {
+    "id": "aguadilla",
+    "name": "Aguadilla",
+    "airports": [
+      "BQN"
+    ]
+  },
+  {
+    "id": "liberia_cr",
+    "name": "Liberia, Costa Rica",
+    "airports": [
+      "LIR"
+    ]
+  },
+  {
+    "id": "rio_de_janeiro",
+    "name": "Rio de Janeiro",
+    "airports": [
+      "GIG"
+    ]
+  },
+  {
+    "id": "lima",
+    "name": "Lima",
+    "airports": [
+      "LIM"
+    ]
+  },
+  {
+    "id": "guatemala",
+    "name": "Guatemala Pacific Coast",
+    "airports": [
+      "GUA"
+    ],
+    "gateway_note": "Ground transfer from Guatemala City to the Pacific coast is excluded."
+  },
+  {
+    "id": "belize",
+    "name": "Belize City",
+    "airports": [
+      "BZE"
+    ]
+  },
+  {
+    "id": "mexico_city",
+    "name": "Mexico City",
+    "airports": [
+      "MEX"
+    ]
+  },
+  {
+    "id": "saint_lucia",
+    "name": "St. Lucia",
+    "airports": [
+      "UVF"
+    ]
+  },
+  {
+    "id": "roatan_bay_islands",
+    "name": "Roatán & Bay Islands",
+    "airports": [
+      "RTB"
+    ]
+  },
+  {
+    "id": "lisbon",
+    "name": "Lisbon",
+    "airports": [
+      "LIS"
+    ]
+  },
+  {
+    "id": "rome",
+    "name": "Rome",
+    "airports": [
+      "FCO"
+    ]
+  },
+  {
+    "id": "paris",
+    "name": "Paris",
+    "airports": [
+      "CDG",
+      "ORY"
+    ]
+  },
+  {
+    "id": "stockholm",
+    "name": "Stockholm",
+    "airports": [
+      "ARN"
+    ]
+  },
+  {
+    "id": "tokyo",
+    "name": "Tokyo",
+    "airports": [
+      "HND",
+      "NRT"
+    ]
+  },
+  {
+    "id": "seoul",
+    "name": "Seoul",
+    "airports": [
+      "ICN"
+    ]
+  },
+  {
+    "id": "punta_cana",
+    "name": "Punta Cana",
+    "airports": [
+      "PUJ"
+    ]
+  },
+  {
+    "id": "aruba",
+    "name": "Aruba",
+    "airports": [
+      "AUA"
+    ]
+  },
+  {
+    "id": "turks_caicos",
+    "name": "Turks & Caicos",
+    "airports": [
+      "PLS"
+    ],
+    "gateway_note": "Fare covers Providenciales; onward travel to other islands is excluded."
+  },
+  {
+    "id": "curacao",
+    "name": "Curaçao",
+    "airports": [
+      "CUR"
+    ]
+  },
+  {
+    "id": "cartagena",
+    "name": "Cartagena",
+    "airports": [
+      "CTG"
+    ]
+  },
+  {
+    "id": "panama_city",
+    "name": "Panama City",
+    "airports": [
+      "PTY"
+    ]
+  },
+  {
+    "id": "marrakech",
+    "name": "Marrakech",
+    "airports": [
+      "RAK"
+    ]
+  },
+  {
+    "id": "cape_town",
+    "name": "Cape Town",
+    "airports": [
+      "CPT"
+    ]
+  },
+  {
+    "id": "sydney",
+    "name": "Sydney",
+    "airports": [
+      "SYD"
+    ]
+  },
+  {
+    "id": "malta",
+    "name": "Malta",
+    "airports": [
+      "MLA"
+    ]
+  },
+  {
+    "id": "kauai",
+    "name": "Kauai",
+    "airports": [
+      "LIH"
+    ]
+  },
+  {
+    "id": "st_john_usvi",
+    "name": "St. John USVI",
+    "airports": [
+      "STT"
+    ],
+    "gateway_note": "St. Thomas airfare only; ground transfer and ferry to St. John are excluded."
+  },
+  {
+    "id": "key_west",
+    "name": "Key West",
+    "airports": [
+      "EYW"
+    ]
+  },
+  {
+    "id": "sanibel_island",
+    "name": "Sanibel Island",
+    "airports": [
+      "RSW"
+    ],
+    "gateway_note": "Fort Myers airfare only; ground transfer to Sanibel is excluded."
+  },
+  {
+    "id": "exuma",
+    "name": "Exuma",
+    "airports": [
+      "GGT"
+    ],
+    "gateway_note": "Great Exuma airfare; transport to other Exuma islands is excluded."
+  },
+  {
+    "id": "harbour_island",
+    "name": "Harbour Island",
+    "airports": [
+      "ELH"
+    ],
+    "gateway_note": "North Eleuthera airfare only; ground transfer and ferry are excluded."
+  },
+  {
+    "id": "st_kitts_nevis",
+    "name": "St. Kitts & Nevis",
+    "airports": [
+      "SKB"
+    ],
+    "gateway_note": "St. Kitts airfare only; onward ferry or flight to Nevis is excluded."
+  },
+  {
+    "id": "grenada",
+    "name": "Grenada",
+    "airports": [
+      "GND"
+    ]
+  },
+  {
+    "id": "bocas_del_toro",
+    "name": "Bocas del Toro",
+    "airports": [
+      "BOC"
+    ],
+    "gateway_note": "Through-fare search only; separate domestic tickets and PTY–PAC transfers are excluded."
+  },
+  {
+    "id": "cape_verde_sal",
+    "name": "Cape Verde (Sal)",
+    "airports": [
+      "SID"
+    ]
+  },
+  {
+    "id": "bonaire",
+    "name": "Bonaire",
+    "airports": [
+      "BON"
+    ]
+  },
+  {
+    "id": "barbados",
+    "name": "Barbados",
+    "airports": [
+      "BGI"
+    ]
+  },
+  {
+    "id": "anguilla",
+    "name": "Anguilla",
+    "airports": [
+      "AXA"
+    ]
+  },
+  {
+    "id": "siquijor_via_cebu",
+    "name": "Siquijor (via Cebu)",
+    "airports": [
+      "CEB"
+    ],
+    "gateway_note": "Cebu airfare only; onward sea and ground travel to Siquijor are excluded."
+  },
+  {
+    "id": "antigua",
+    "name": "Antigua",
+    "airports": [
+      "ANU"
+    ]
+  },
+  {
+    "id": "dominica",
+    "name": "Dominica",
+    "airports": [
+      "DOM"
+    ]
+  },
+  {
+    "id": "tenerife",
+    "name": "Tenerife",
+    "airports": [
+      "TFS",
+      "TFN"
+    ]
+  },
+  {
+    "id": "zanzibar",
+    "name": "Zanzibar",
+    "airports": [
+      "ZNZ"
+    ]
+  }
+]

@@ -1,5 +1,8 @@
 import asyncio
 import json
+import math
+import sys
+import calendar
 import time
 import urllib.parse
 from datetime import date, datetime, timedelta
@@ -78,7 +81,7 @@ def _duration_minutes(value: Any) -> float:
                 minutes = int(part[:-1])
         except ValueError:
             return float("inf")
-    return (hours * 60) + minutes
+    return (hours * 60) + minutes if any(part.endswith(("h", "m")) for part in value.split()) else float("inf")
 
 
 def _fare_sort_key(deal: Dict[str, Any]) -> Tuple[Any, ...]:
@@ -93,6 +96,7 @@ def _fare_sort_key(deal: Dict[str, Any]) -> Tuple[Any, ...]:
         str(deal.get("departure_date", "")),
         str(deal.get("return_date", "")),
         str(deal.get("layover_summary", "")),
+        json.dumps(deal.get("legs", []), sort_keys=True),
     )
 
 
@@ -139,52 +143,27 @@ def _get_flights_resilient(query):
 
 def generate_target_date_pairs(
     months: List[str] = ["2026-11", "2026-12", "2027-01"],
-    trip_days: int = 7,
+    trip_days: int = 6,
     trip_durations_days: Optional[List[int]] = None,
+    step_days: int = 5,
 ) -> List[Tuple[str, str]]:
-    """
-    Generates representative 6-8 day round-trip windows for each target month.
-    Covers early month, mid month, and late month (including holiday windows).
-    """
-    date_pairs = []
-    durations = sorted({int(duration) for duration in (trip_durations_days or [trip_days])})
-    if not durations or any(duration < 1 for duration in durations):
-        raise ValueError("trip durations must contain one or more positive whole days")
-
-    # Specific curated target travel windows across Nov, Dec, Jan
-    curated_departures = [
-        # November: Early, Mid, Thanksgiving
-        "2026-11-06",
-        "2026-11-13",
-        "2026-11-20",
-        # December: Early, Mid, Holiday / Christmas
-        "2026-12-04",
-        "2026-12-11",
-        "2026-12-23",
-        # January: Early, Mid, Late
-        "2027-01-08",
-        "2027-01-15",
-        "2027-01-22"
-    ]
-
-    for dep_str in curated_departures:
-        dep_date = datetime.strptime(dep_str, "%Y-%m-%d")
-        month_key = dep_date.strftime("%Y-%m")
-        if month_key in months:
-            for duration in durations:
-                ret_date = dep_date + timedelta(days=duration)
-                date_pairs.append((dep_str, ret_date.strftime("%Y-%m-%d")))
-
-    return date_pairs
+    """Sample inclusive calendar-day trips wholly contained in each month."""
+    pairs = []
+    for month in sorted(set(months)):
+        start = date.fromisoformat(month + "-01")
+        end = start.replace(day=calendar.monthrange(start.year, start.month)[1])
+        pairs.extend(generate_date_pairs_between(start.isoformat(), end.isoformat(),
+                     trip_durations_days or [trip_days], step_days))
+    return pairs
 
 
 def generate_date_pairs_between(
     start_date: str,
     end_date: str,
     trip_durations_days: List[int],
-    step_days: int = 7,
+    step_days: int = 5,
 ) -> List[Tuple[str, str]]:
-    """Generate round-trip windows wholly contained in any travel date range."""
+    """Generate inclusive calendar-day trips; six days means five nights."""
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
     if end <= start:
@@ -192,14 +171,14 @@ def generate_date_pairs_between(
     if step_days < 1:
         raise ValueError("date-step-days must be at least 1")
     durations = sorted({int(duration) for duration in trip_durations_days})
-    if not durations or any(duration < 1 for duration in durations):
-        raise ValueError("trip lengths must contain one or more positive whole days")
+    if not durations or any(duration < 2 for duration in durations):
+        raise ValueError("round-trip lengths must contain whole days of at least 2")
 
     pairs = []
     departure = start
     while departure < end:
         for duration in durations:
-            check_out = departure + timedelta(days=duration)
+            check_out = departure + timedelta(days=duration - 1)
             if check_out <= end:
                 pairs.append((departure.isoformat(), check_out.isoformat()))
         departure += timedelta(days=step_days)
@@ -235,7 +214,7 @@ def scan_route(
     destination: str,
     dep_date: str,
     ret_date: Optional[str] = None,
-    max_price: float = 650.0,
+    max_price: Optional[float] = None,
     max_stops: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
@@ -244,8 +223,7 @@ def scan_route(
     """
     deals = []
     if not get_flights or not fetch_flights_html or not create_filter:
-        print("fast-flights is not installed.")
-        return deals
+        raise FlightLookupError("fast-flights is not installed or could not be imported")
 
     try:
         flights_query = [
@@ -265,6 +243,8 @@ def scan_route(
                     flights=flights_query,
                     trip=trip_type,
                     currency="USD",
+                    language="en-US",
+                    seat="economy",
                     max_stops=max_stops,
                 )
                 results = _get_flights_resilient(q)
@@ -295,12 +275,14 @@ def scan_route(
             except (ValueError, TypeError):
                 continue
 
-            if price_num <= max_price:
+            if math.isfinite(price_num) and price_num > 0 and (max_price is None or price_num <= max_price):
                 airlines = getattr(item, "airlines", ["Unknown"])
                 airline_str = ", ".join(airlines) if isinstance(airlines, list) else str(airlines)
 
                 # Extract stops, layovers, and durations
                 subflights = getattr(item, "flights", [])
+                if not subflights:
+                    raise ValueError("priced fare has no outbound flight segments")
                 stops = max(0, len(subflights) - 1) if subflights else 0
 
                 if max_stops is not None and stops > max_stops:
@@ -333,7 +315,9 @@ def scan_route(
                         "duration": format_duration_minutes(getattr(leg, "duration", 0)),
                         "dep_time": dep_time_str,
                         "arr_time": arr_time_str,
-                        "plane": getattr(leg, "plane_type", "")
+                        "plane": getattr(leg, "plane_type", ""),
+                        "departure_date": date(*leg.departure.date).isoformat(),
+                        "arrival_date": date(*leg.arrival.date).isoformat(),
                     })
 
                 # Provider timestamps are local airport times without timezone
@@ -351,6 +335,13 @@ def scan_route(
                     "departure_date": dep_date,
                     "return_date": ret_date,
                     "is_round_trip": bool(ret_date),
+                    "trip_days": (date.fromisoformat(ret_date) - date.fromisoformat(dep_date)).days + 1 if ret_date else 1,
+                    "currency": "USD",
+                    "price_basis": "per_person",
+                    "passengers": 1,
+                    "cabin": "economy",
+                    "duration_scope": "outbound",
+                    "return_itinerary_available": False,
                     "stops": stops,
                     "layovers_count": len(layovers),
                     "layovers": layovers,
@@ -358,13 +349,13 @@ def scan_route(
                     "flight_duration_air": in_air_str,
                     "total_journey_duration": total_journey_str,
                     "legs": leg_details,
-                    "booking_url": build_google_flights_url(origin, destination, dep_date, ret_date)
+                    "booking_url": q.url()
                 })
 
     except FlightLookupError:
         raise
     except Exception as e:
-        print(f"Error scanning {origin} -> {destination} ({dep_date} to {ret_date}): {e}")
+        raise FlightLookupError(f"Could not parse {origin} → {destination} ({dep_date} to {ret_date}): {e}") from e
 
     return deals
 
@@ -379,6 +370,7 @@ def scan_flights(
     trip_durations_days: Optional[List[int]] = None,
     delay_between_requests: float = 1.0,
     source_errors: Optional[List[Dict[str, Any]]] = None,
+    search_records: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Main entrypoint to sweep Google Flights for deals across origins and destinations.
@@ -403,13 +395,8 @@ def scan_flights(
         resolved_dests = [entry["code"] if isinstance(entry, dict) else entry for entry in dest_entries]
 
     target_months = months or cfg.get("target_months", ["2026-11", "2026-12", "2027-01"])
-    global_max_price = max_price if max_price is not None else cfg.get("default_max_cash_price_usd", 550)
-
-    # Destination-specific price limits from config if available
-    dest_limits = {}
-    for entry in cfg.get("destinations", []):
-        if isinstance(entry, dict):
-            dest_limits[entry["code"]] = entry.get("max_price", global_max_price)
+    resolved_dests = list(dict.fromkeys(resolved_dests))
+    active_origins = list(dict.fromkeys(active_origins))
 
     # Generate dates to scan
     pairs = date_pairs or generate_target_date_pairs(
@@ -417,26 +404,22 @@ def scan_flights(
         trip_durations_days=trip_durations_days or cfg.get("default_trip_durations_days", [7]),
     )
 
-    print(f"✈️ Starting flight scan...")
-    print(f"  Origins: {active_origins}")
-    print(f"  Destinations: {resolved_dests}")
-    print(f"  Date pairs to check: {len(pairs)} windows across {target_months}")
-    print(f"  Max price filter: ${global_max_price}\n")
+    print(f"Flight scan: {len(active_origins)} origin(s), {len(resolved_dests)} airport(s), {len(pairs)} date pairs; price ceiling: {max_price}", file=sys.stderr)
 
     all_deals = []
     lookup_errors = []
     successful_lookups = 0
     for origin in active_origins:
         for dest in resolved_dests:
-            dest_price_limit = max_price if max_price is not None else dest_limits.get(dest, global_max_price)
             for dep_date, ret_date in pairs:
+                record = {"origin": origin, "destination": dest, "departure_date": dep_date, "return_date": ret_date}
                 try:
                     deals = scan_route(
                         origin=origin,
                         destination=dest,
                         dep_date=dep_date,
                         ret_date=ret_date,
-                        max_price=dest_price_limit,
+                        max_price=max_price,
                         max_stops=max_stops
                     )
                     successful_lookups += 1
@@ -452,28 +435,31 @@ def scan_flights(
                             "return_date": ret_date,
                             "message": str(error),
                         })
-                    print(f"⚠️ {error}")
+                    if search_records is not None:
+                        search_records.append({**record, "status": "unavailable", "fare_count": 0, "message": str(error)})
+                    print(f"⚠️ {error}", file=sys.stderr)
+                    time.sleep(delay_between_requests)
                     continue
-                if deals:
-                    # Sort deals by price and keep cheapest 2 per date window
-                    deals = sorted(deals, key=_fare_sort_key)
-                    all_deals.extend(deals[:2])
+                all_deals.extend(deals)
+                if search_records is not None:
+                    search_records.append({**record, "status": "ok" if deals else "no_matching_fares", "fare_count": len(deals)})
+                print(f"{origin} → {dest} {dep_date}–{ret_date}: {len(deals)} fare(s)", file=sys.stderr)
 
                 time.sleep(delay_between_requests)
 
-    if successful_lookups == 0 and lookup_errors:
+    if successful_lookups == 0 and lookup_errors and search_records is None:
         raise FlightLookupError(
             "Every Google Flights lookup failed. The first provider error was: "
             f"{lookup_errors[0]}"
         )
     if lookup_errors:
-        print(f"⚠️ Skipped {len(lookup_errors)} lookup(s) after provider errors.")
+        print(f"⚠️ Skipped {len(lookup_errors)} lookup(s) after provider errors.", file=sys.stderr)
 
     # Deduplicate and sort by price
     unique_deals = []
     seen = set()
     for d in sorted(all_deals, key=_fare_sort_key):
-        key = (d["origin"], d["destination"], d["departure_date"], d["return_date"], d["price"], d["airline"])
+        key = json.dumps(d, sort_keys=True)
         if key not in seen:
             seen.add(key)
             unique_deals.append(d)
