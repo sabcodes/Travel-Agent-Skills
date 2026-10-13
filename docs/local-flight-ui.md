@@ -24,10 +24,18 @@ Display the cheapest qualifying fare, the destination/date comparison matrix, an
 
 Result filters call the CLI's offline filter against the saved raw snapshot. Clearing a local filter can recover raw fares; it cannot undo a connection restriction used in the live provider query. Filters do not refresh quotes.
 
-Download the currently filtered comparison table as UTF-8 CSV, with status values and best-fare details. Download JSON to retain the raw candidates and replay filters with the CLI. Search results last until the app stops or another search replaces them. There is no searchable history in this version. Refreshing the browser reconnects to the active search or current results.
+Download the currently filtered comparison table as UTF-8 CSV, with status values and best-fare details. Download JSON to retain the raw candidates and replay filters with the CLI. Search results last until the app stops or another search replaces them. There is no searchable history in this version. Refreshing the browser restores the submitted search settings and reconnects to the active search or current results.
 
 ## Local boundary and verification
 
 Serve only on `127.0.0.1`. Accept fixed API actions and validated arguments; invoke subprocesses without a shell. Validate request host/origin and use a per-process CSRF token for mutations. Serve only the three known static assets. Escape displayed data and spreadsheet formula prefixes in CSV.
 
 Test CLI progress on both successful and failed lookups; validate custom-location persistence and reserved names; exercise real offline CLI filtering/CSV and local HTTP boundaries. Browser-test regular/deep planning, selection, add-location, validation, progress, filtering, downloads, and cancellation. Live-test only two destinations. Intel compatibility is supported by published dependency wheels but requires separate hardware testing for a verified Intel claim.
+
+Run the backend integration checks with:
+
+```bash
+.venv/bin/python -B -W error::DeprecationWarning -m unittest test_flight_ui -v
+```
+
+Verified on October 12, 2026: January regular planning produced 12 lookups and deep planning 52 for Cancun/Maui. The regular January live run completed 12 lookups; a small deep January 1–7 run completed four. Both returned fares with no source errors. Browser checks covered adding a location, stopping a search, offline price filtering, CSV/JSON downloads, CLI replay, and restored settings/results after refresh. Quote snapshots and screenshots stay outside the repository; these checks validate behavior, not future prices or availability.

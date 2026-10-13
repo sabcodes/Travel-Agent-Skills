@@ -125,10 +125,26 @@ function renderProgress(state) {
   $("progress-title").textContent = {running: "Searching flights", done: "Search complete", partial: "Search complete · some sources failed", cancelled: "Search stopped", error: "Search could not finish"}[state.status] || "Search progress";
 }
 
-async function poll() {
+function restoreQuery(values) {
+  selected.clear();
+  values.destinations.forEach(location => selected.add(location.id));
+  $("start-date").value = values.start_date;
+  $("end-date").value = values.end_date;
+  $("duration").value = values.trip_lengths[0];
+  $("extra-lengths").value = values.trip_lengths.slice(1).join(", ");
+  $("origin").value = values.origins.join(", ");
+  $("date-step").value = values.mode === "deep" ? 5 : values.date_step_days;
+  document.querySelector(`input[name="mode"][value="${values.mode}"]`).checked = true;
+  for (const key of limitNames) $("search-" + key.replaceAll("_", "-")).value = values.filters[key] ?? "";
+  renderPicker();
+  updateMode();
+}
+
+async function poll(restore = false) {
   clearTimeout(polling);
   try {
     const state = await api("/api/state");
+    if (restore && state.query) restoreQuery(state.query);
     renderProgress(state);
     if (state.status === "running") {
       polling = setTimeout(poll, 1000);
@@ -308,7 +324,7 @@ async function init() {
   const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   $("start-date").value = iso(first);
   $("end-date").value = iso(last);
-  try { pool = await api("/api/destinations"); renderPicker(); updateMode(); await poll(); }
+  try { pool = await api("/api/destinations"); renderPicker(); updateMode(); await poll(true); }
   catch (error) { showError(error); }
 }
 init();

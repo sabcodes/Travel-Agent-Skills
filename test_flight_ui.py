@@ -36,7 +36,7 @@ class FlightUITests(unittest.TestCase):
         snapshot.write_text(json.dumps(payload), encoding="utf-8")
         self.app.job = {"id": "test", "status": "done", "completed": 2, "total": 2,
                         "current": "Complete", "error": None, "cancelled": False, "started": 0, "finished": 10,
-                        "snapshot": str(snapshot), "result": payload, "view": payload}
+                        "snapshot": str(snapshot), "result": payload, "view": payload, "query": payload["query"]}
         return payload
 
     def test_regular_and_deep_plans_use_the_real_cli(self):
@@ -46,8 +46,10 @@ class FlightUITests(unittest.TestCase):
         self.assertEqual(regular["summary"]["planned_searches"], 12)
         self.assertEqual(deep["summary"]["planned_searches"], 52)
         self.assertNotIn("--date-step-days", arguments)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "date-range end must be after its start"):
             self.app.plan({**values, "end_date": "2026-12-01"})
+        self.completed_snapshot()
+        self.assertEqual(self.app.state()["query"]["start_date"], "2027-01-01")
 
     def test_custom_locations_persist_and_reserved_all_cannot_trigger_a_sweep(self):
         entry = self.app.add_location({"name": "Honolulu", "airports": "hnl, HNL"})
@@ -119,6 +121,17 @@ class FlightUITests(unittest.TestCase):
             popen.assert_not_called()
         self.assertEqual(job["status"], "cancelled")
 
+    def test_eta_uses_completed_attempts_and_waits_for_the_first_lookup(self):
+        self.completed_snapshot()
+        self.app.job.update(status="running", completed=0, total=12, started=100)
+        del self.app.job["finished"]
+        with patch("flight_ui.time.monotonic", return_value=120):
+            self.assertIsNone(self.app.state()["eta_seconds"])
+            self.app.job["completed"] = 3
+            self.assertEqual(self.app.state()["eta_seconds"], 60)
+            self.app.job["status"] = "done"
+            self.assertEqual(self.app.state()["eta_seconds"], 0)
+
     def test_http_restricts_host_origin_token_and_static_files(self):
         self.completed_snapshot()
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -137,6 +150,7 @@ class FlightUITests(unittest.TestCase):
             return result
 
         self.assertEqual(request("/")[0], 200)
+        self.assertEqual(json.loads(request("/api/state")[1])["query"]["destinations"][0]["id"], "cancun")
         self.assertEqual(request("/flight_destinations.json")[0], 404)
         self.assertEqual(request("/api/destinations", headers={"Host": "outside.example"})[0], 403)
         self.assertEqual(request("/api/locations", {"name": "Blocked", "airports": "HNL"})[0], 403)

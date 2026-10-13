@@ -26,7 +26,8 @@ def cli(arguments, timeout=30):
     result = subprocess.run([sys.executable, "-u", str(ROOT / "flight_tools.py"), *arguments],
                             cwd=ROOT, capture_output=True, text=True, timeout=timeout)
     if result.returncode not in (0, 1):
-        raise ValueError(result.stderr.strip()[-2000:] or "Flight CLI failed")
+        detail = result.stderr.strip().splitlines()
+        raise ValueError(detail[-1].split(": error:", 1)[-1].strip() if detail else "Flight CLI failed")
     return json.loads(result.stdout)
 
 
@@ -163,7 +164,7 @@ class App:
             self.job = {"id": uuid.uuid4().hex, "status": "running", "completed": 0,
                         "total": plan["summary"]["planned_searches"], "started": time.monotonic(),
                         "current": "Fetching the first fare…", "error": None, "cancelled": False,
-                        "snapshot": str(snapshot), "result": None, "view": None}
+                        "snapshot": str(snapshot), "result": None, "view": None, "query": plan["query"]}
             self.worker = threading.Thread(target=self.run, args=(self.job, [*arguments, "--pool", str(pool_path),
                                            "--output", str(snapshot), "--progress-json"]), daemon=True)
             self.worker.start()
@@ -224,7 +225,8 @@ class App:
             # Estimate only after an actual lookup; provider retries make it approximate.
             remaining = max(0, elapsed / completed * total - elapsed) if completed else None
             return {key: job[key] for key in ("id", "status", "completed", "total", "current", "error")} | {
-                "elapsed_seconds": elapsed, "eta_seconds": remaining if job["status"] == "running" else 0}
+                "elapsed_seconds": elapsed, "eta_seconds": remaining if job["status"] == "running" else 0,
+                "query": job.get("query")}
 
     def result(self):
         with self.lock:
