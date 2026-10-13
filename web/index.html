@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="__CSRF_TOKEN__">
+  <title>Travel Agent · Flight finder</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<main>
+  <header><a class="brand" href="/">↗ Travel Agent</a><span class="badge">LOCAL FLIGHT FINDER</span></header>
+  <section class="intro"><p class="eyebrow">A little flexibility goes a long way.</p><h1>Find your next getaway.</h1><p>Compare destinations and dates. See where your money takes you.</p></section>
+  <p id="error" class="error" role="alert" hidden></p>
+  <section class="card" aria-label="Flight search">
+    <form id="search-form">
+      <fieldset id="search-fields">
+        <div class="section-label">YOUR TRIP <span>Economy · round trip · USD per person</span></div>
+        <div class="trip-grid">
+          <div class="field location-field">
+            <label id="locations-label">Where to?</label>
+            <details id="locations-picker" class="picker">
+              <summary aria-labelledby="locations-label locations-summary"><span id="locations-summary">Choose locations</span></summary>
+              <div class="picker-panel">
+                <input id="location-search" type="search" placeholder="Find a location or airport" aria-label="Find a location or airport" autocomplete="off">
+                <div class="picker-actions"><button type="button" id="select-all">Select all</button><button type="button" id="clear-locations">Clear</button><span id="pool-count"></span></div>
+                <div id="location-options"></div>
+              </div>
+            </details>
+            <button type="button" class="text-button" id="add-location">+ Add a location</button>
+          </div>
+          <label class="field">Vacation length <div class="input-suffix"><input id="duration" type="number" value="6" min="2" step="1" required><span>days</span></div><small>Inclusive calendar days</small></label>
+          <label class="field">Start date<input id="start-date" type="date" required></label>
+          <label class="field">End date<input id="end-date" type="date" required><small>Last return departure</small></label>
+        </div>
+        <div class="mode-row">
+          <div class="mode-options" role="group" aria-label="Search depth">
+            <label><input type="radio" name="mode" value="lite" checked><span>Regular <small>Sample dates</small></span></label>
+            <label><input type="radio" name="mode" value="deep"><span>Deep <small>Every departure</small></span></label>
+          </div>
+          <p id="mode-help">One departure every 5 days.</p>
+        </div>
+        <details class="advanced"><summary>Advanced options</summary>
+          <div class="advanced-grid">
+            <label class="field">Origin airport(s)<input id="origin" value="SFO" placeholder="SFO, SJC" required></label>
+            <label class="field">Regular spacing (days)<input id="date-step" type="number" value="5" min="1" step="1"></label>
+            <label class="field">Additional trip lengths<input id="extra-lengths" placeholder="e.g. 7, 8, 9"><small>Inclusive days, comma-separated</small></label>
+            <label class="field">Price ceiling (USD)<input id="search-max-price" type="number" min="0.01" step="0.01" placeholder="No limit"></label>
+            <label class="field">Maximum connections<select id="search-max-stops"><option value="">No limit</option><option value="0">Nonstop</option><option value="1">1 connection</option><option value="2">2 connections</option><option value="3">3 connections</option><option value="4">4 connections</option></select></label>
+            <label class="field">Outbound duration (hours)<input id="search-max-duration-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
+            <label class="field">Connection wait (hours)<input id="search-max-layover-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
+          </div>
+          <p class="hint">A live connection limit restricts the provider search. Duration and wait limits describe outbound travel.</p>
+        </details>
+        <div class="search-footer"><div><button type="button" class="text-button" id="preview">Preview search plan</button><span id="plan" role="status"></span></div><button class="primary" id="search-button" type="submit">Find flights <span aria-hidden="true">↗</span></button></div>
+      </fieldset>
+    </form>
+  </section>
+  <section id="progress-section" class="card progress-card" aria-label="Search progress" hidden>
+    <div class="progress-heading"><h2 id="progress-title">Searching flights</h2><button type="button" class="secondary" id="stop-search">Stop search</button></div>
+    <div class="progress-meta"><span id="progress-count" role="status"></span><span id="eta"></span></div>
+    <progress id="progress" max="100" value="0" aria-label="Completed airport and date searches"></progress>
+    <p id="current-route" class="hint"></p>
+  </section>
+  <section id="results" hidden>
+    <div class="results-heading"><div><p class="eyebrow">YOUR OPTIONS</p><h2>The fares are in.</h2><p id="result-meta"></p></div><div class="downloads"><a class="secondary" href="/api/export.csv" download>Save CSV ↓</a><a class="text-button" href="/api/export.json" download>Save JSON</a></div></div>
+    <div id="best-fare" class="best-fare"></div>
+    <section class="card results-card">
+      <form id="filter-form">
+        <div class="section-label">FILTER RESULTS <span>Uses saved fares · no new search</span></div>
+        <div class="filter-grid">
+          <label class="field">Maximum price (USD)<input id="filter-max-price" type="number" min="0.01" step="0.01" placeholder="No limit"></label>
+          <label class="field">Maximum connections<select id="filter-max-stops"><option value="">No limit</option><option value="0">Nonstop</option><option value="1">1 connection</option><option value="2">2 connections</option><option value="3">3 connections</option><option value="4">4 connections</option></select></label>
+          <label class="field">Outbound duration (hours)<input id="filter-max-duration-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
+          <label class="field">Connection wait (hours)<input id="filter-max-layover-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
+          <div class="filter-buttons"><button type="submit" class="secondary" id="apply-filters">Apply</button><button type="button" class="text-button" id="reset-filters">Clear</button></div>
+        </div>
+      </form>
+      <p id="provider-limit" class="hint" hidden></p>
+      <div class="table-heading"><h3>Compare dates</h3><span>Cheapest qualifying fare for each window</span></div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Destination and date comparison"><table id="matrix"></table></div>
+      <p class="hint">Partial = incomplete airport coverage. Unavailable = a source lookup failed. No fares = a successful search returned no fares. Filtered out = no fare meets your filters.</p>
+    </section>
+    <details class="card fare-details"><summary id="fares-summary">Matching flights</summary><div class="table-scroll" tabindex="0" role="region" aria-label="Matching flight itineraries"><table id="fares"></table></div></details>
+    <details id="source-errors" class="card fare-details" hidden><summary id="errors-summary">Source errors</summary><ul id="error-list"></ul></details>
+    <p class="footnote">Quotes can change. Connections, waits, and durations describe outbound travel; selected return legs are unavailable. Gateway fares exclude onward transport. Booking links open a search, not a held ticket.</p>
+  </section>
+  <footer>Runs on your Mac. Powered by the flight search CLI.</footer>
+</main>
+<dialog id="location-dialog" aria-labelledby="add-title">
+  <form id="location-form">
+    <h2 id="add-title">Add a location</h2><p>Give it a name and the airport(s) you want to compare.</p>
+    <label class="field">Location name<input id="new-name" required maxlength="100" placeholder="Honolulu"></label>
+    <label class="field">Arrival airport(s)<input id="new-airports" required placeholder="HNL" autocomplete="off"><small>Three-letter IATA codes, comma-separated</small></label>
+    <label class="field">Gateway note <small>optional</small><input id="new-note" maxlength="500" placeholder="Onward ferry not included"></label>
+    <p id="location-error" class="error" role="alert" hidden></p>
+    <div class="dialog-actions"><button type="button" class="secondary" id="cancel-location">Cancel</button><button type="submit" class="primary" id="save-location">Add location</button></div>
+  </form>
+</dialog>
+</body>
+</html>

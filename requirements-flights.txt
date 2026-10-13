@@ -1,0 +1,2 @@
+# Minimal dependencies for flight_tools.py and the local browser UI.
+fast-flights>=3.1.0,<4

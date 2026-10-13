@@ -168,6 +168,7 @@ def main(argv=None):
     search.add_argument("--dest", default="all", help="all, comma-separated destination ids/names, or IATA codes")
     search.add_argument("--origin", default="SFO", help="Comma-separated origin airport codes")
     search.add_argument("--dry-run", action="store_true", help="Emit the complete search plan without network requests")
+    search.add_argument("--progress-json", action="store_true", help="Emit one structured progress event per lookup on stderr")
     saved = commands.add_parser("filter", help="Filter and rank a saved search without network requests")
     saved.add_argument("--input", required=True)
     saved.add_argument("--dest", help="Saved destination ids/names or airport codes")
@@ -214,7 +215,8 @@ def main(argv=None):
             else:
                 payload["flight_deals"] = scan_flights(config_path=args.config, origins=origins, destinations=airports,
                     date_pairs=pairs, max_price=None, max_stops=args.max_stops,
-                    source_errors=payload["source_errors"], search_records=payload["searches"])
+                    source_errors=payload["source_errors"], search_records=payload["searches"],
+                    progress_callback=(lambda event: print(json.dumps({"event": "progress", **event}), file=sys.stderr, flush=True)) if args.progress_json else None)
                 for fare in payload["flight_deals"]:
                     location = next(d for d in selected if fare["destination"] in d["airports"])
                     fare["destination_name"] = location["name"]

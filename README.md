@@ -12,7 +12,7 @@ Install these first:
 - **Git** to clone and update the project: [Git downloads](https://git-scm.com/downloads/).
 - An internet connection to install packages and fetch live fares. Filtering saved results works offline.
 
-The Python dependencies are listed in [requirements.txt](requirements.txt). The install command below downloads them automatically, including `fast-flights`, feed readers, and the libraries used by the combined tracker. Playwright is a Python dependency, but flight searches do not require downloading browser binaries. The CLI runs without travel-account credentials or an OpenAI API key; Codex is optional for using the agent skill.
+For the **flight CLI and browser app only**, use [requirements-flights.txt](requirements-flights.txt); it installs `fast-flights` and its dependencies. For award feeds, hotels, and BnBs as well, use [requirements.txt](requirements.txt). Playwright is a dependency of the combined tracker, but flight searches do not require it or browser-binary downloads. The CLI and app run without travel-account credentials or an OpenAI API key; Codex is optional for using the agent skill.
 
 On macOS/Linux:
 
@@ -20,7 +20,7 @@ On macOS/Linux:
 git clone https://github.com/sabcodes/Travel-Agent-Skills.git
 cd Travel-Agent-Skills
 python3.14 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements-flights.txt
 ```
 
 If you already have the repository, run the environment and package-install commands from its root. On Windows, create the environment with `py -3.14 -m venv .venv` and replace `.venv/bin/python` with `.venv\Scripts\python.exe` in the commands.
@@ -33,7 +33,29 @@ Verify setup with a network-free search preview:
   --start-date 2027-01-01 --end-date 2027-01-31 --dry-run --format table
 ```
 
-Continue with the flight CLI below, or see [Load the Skill in Codex](#load-the-skill-in-codex) for agent setup.
+Continue with the browser app or flight CLI below, or see [Load the Skill in Codex](#load-the-skill-in-codex) for agent setup. Install `requirements.txt` instead when using the combined tracker.
+
+## Local browser app
+
+After setup, double-click **Launch Travel Agent.command** in Finder, or run:
+
+```bash
+.venv/bin/python flight_ui.py
+```
+
+It opens `http://127.0.0.1:8765` in your browser. Keep the terminal open while using the app; press Control-C there to stop it. If the launcher lost its executable permission, run `chmod +x "Launch Travel Agent.command"`. If the port is occupied, run `.venv/bin/python flight_ui.py --port 0` to choose an available port. `--no-browser` starts the server without opening a tab.
+
+The app uses Python's standard library and plain HTML/CSS/JavaScript, with no Node installation or frontend build. Use a current Safari, Chrome, Firefox, or Edge browser. The [Python universal2 installer](https://docs.python.org/3.14/using/mac.html) supports Intel and Apple Silicon; the inspected Python 3.14 and flight dependency versions have Mac wheels for both architectures. The known requirements are macOS 10.15+ on Intel and macOS 11+ on Apple Silicon. Install a fresh virtual environment on each Mac rather than copying `.venv`. The app has been tested on Apple Silicon; Intel hardware has not been tested. Dependency updates may change supported OS versions.
+
+1. Choose locations in the searchable multi-select dropdown. **Add a location** accepts a name, one or more arrival IATA airport codes, and an optional gateway note.
+2. Enter inclusive vacation days and start/end dates. Six days means Jan 1–6. The end date is the last return **departure**, not final arrival.
+3. Choose **Regular** (the CLI's lite mode, five-day departure spacing) or **Deep** (every eligible departure). **Advanced options** exposes origin airports, spacing, extra trip lengths, and optional price/connection/duration/wait limits.
+4. **Preview search plan** shows the exact number of lookups without fetching fares. **Find flights** runs the CLI sequentially and shows completed lookups plus an approximate ETA after the first lookup. Failures count as completed attempts; provider delays and retries affect ETA. **Stop search** cancels the process.
+5. Compare the date matrix and lowest qualifying fare, expand matching itineraries, and apply offline filters. **Save CSV** downloads the visible filtered matrix, including empty/error statuses and best-fare details. **Save JSON** retains raw candidates for later CLI filtering. Filtering does not refresh availability.
+
+Added locations persist in `~/Library/Application Support/Travel Agent/locations.json` on macOS; `--data-dir PATH` changes that folder. Additions belong to this local app and do not edit the checked-in presets. To use them directly in the CLI, add the same records to a full destination pool as described below; the local additions file is not a merged preset pool.
+
+The app serves only on `127.0.0.1`, runs one live search at a time, and executes fixed CLI commands without a shell. Refreshing the page reconnects to the active search or current results. Results live in temporary files until the app stops or another search replaces them; export before stopping. There is no searchable history. Search/filter/export data remains local except for the live provider requests and booking links you open. The agreed scope and verification criteria are in [docs/local-flight-ui.md](docs/local-flight-ui.md).
 
 ## Flight-only CLI
 
@@ -73,7 +95,7 @@ Trip lengths count **inclusive calendar days**: six days means Jan 1–6, not Ja
 
 Prices are USD economy round-trip quotes for **one adult**. `--adults` remains an accommodation option in the combined tracker. Flight searches have **no implicit price ceiling**: configured destination thresholds and the old $2,000 discovery ceiling do not exclude fares. Use `--max-price` when a ceiling is wanted.
 
-JSON is the default stdout format; progress goes to stderr. `--output` always saves structured JSON even when stdout is a table. Snapshots contain the query, timestamp, all provider-returned candidates, status for every airport/date pair, a destination/window matrix, and deterministic minima. Fares rank by price, stops, outbound elapsed time, airline, and stable itinerary fields. This retains all results exposed by the provider; it does not guarantee exhaustive airline inventory.
+JSON is the default stdout format; progress goes to stderr. `--progress-json` adds one JSON progress event per completed lookup on stderr for the UI and other clients. `--output` always saves structured JSON even when stdout is a table. Snapshots contain the query, timestamp, all provider-returned candidates, status for every airport/date pair, a destination/window matrix, and deterministic minima. Fares rank by price, stops, outbound elapsed time, airline, and stable itinerary fields. This retains all results exposed by the provider; it does not guarantee exhaustive airline inventory.
 
 The offline filter reads `raw_flight_deals`, so local price/duration filters can be relaxed later. A `--max-stops` restriction used during live search narrows the provider query in both directions; offline filtering cannot recover fares omitted by that query. Saved connection counts, layover waits, and durations describe **outbound travel only**. All fares are retained; there is no top-two truncation.
 

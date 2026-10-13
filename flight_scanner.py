@@ -6,7 +6,7 @@ import calendar
 import time
 import urllib.parse
 from datetime import date, datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Callable
 
 try:
     from fast_flights import FlightQuery, create_filter, fetch_flights_html, get_flights
@@ -371,6 +371,7 @@ def scan_flights(
     delay_between_requests: float = 1.0,
     source_errors: Optional[List[Dict[str, Any]]] = None,
     search_records: Optional[List[Dict[str, Any]]] = None,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Main entrypoint to sweep Google Flights for deals across origins and destinations.
@@ -409,6 +410,8 @@ def scan_flights(
     all_deals = []
     lookup_errors = []
     successful_lookups = 0
+    completed = 0
+    total = len(active_origins) * len(resolved_dests) * len(pairs)
     for origin in active_origins:
         for dest in resolved_dests:
             for dep_date, ret_date in pairs:
@@ -438,12 +441,18 @@ def scan_flights(
                     if search_records is not None:
                         search_records.append({**record, "status": "unavailable", "fare_count": 0, "message": str(error)})
                     print(f"⚠️ {error}", file=sys.stderr)
+                    completed += 1
+                    if progress_callback:
+                        progress_callback({**record, "status": "unavailable", "completed": completed, "total": total})
                     time.sleep(delay_between_requests)
                     continue
                 all_deals.extend(deals)
                 if search_records is not None:
                     search_records.append({**record, "status": "ok" if deals else "no_matching_fares", "fare_count": len(deals)})
                 print(f"{origin} → {dest} {dep_date}–{ret_date}: {len(deals)} fare(s)", file=sys.stderr)
+                completed += 1
+                if progress_callback:
+                    progress_callback({**record, "status": "ok" if deals else "no_matching_fares", "completed": completed, "total": total})
 
                 time.sleep(delay_between_requests)
 

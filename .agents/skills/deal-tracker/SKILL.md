@@ -9,6 +9,12 @@ Use the checked-in CLI for searches, date generation, filtering, and ranking. Th
 
 For first-time installation, follow [README setup and requirements](../../../README.md#setup-and-requirements) before running the CLI.
 
+## Local browser app
+
+For a visual search/filter workflow, run `.venv/bin/python flight_ui.py` or the Mac launcher. The lightweight local app executes `flight_tools.py` for planning, live search, and offline filtering; it uses the same ranking and date rules below. Regular means lite. Progress counts completed attempts, including failures, and ETA is an estimate based on measured lookup times.
+
+The picker contains all presets and locally added locations. Additions persist outside the repository; they do not modify the shared CLI pool. CSV exports the currently filtered matrix and best-fare details; JSON retains raw candidates for CLI replay. Search results are temporary until the app stops or a new search replaces them. See [README browser app](../../../README.md#local-browser-app) for installation, local storage, and compatibility, and [UI spec](../../../docs/local-flight-ui.md) for scope and verification.
+
 ## Cash-flight workflow
 
 1. Translate requested airports, total travel window, trip lengths, search depth, and optional limits into a command. Named destinations restrict the search to those selections. Discover pool ids, names, airport alternatives, and gateway notes with `flight_tools.py destinations`.
