@@ -14,6 +14,15 @@ Install these first:
 
 For the **flight CLI and browser app only**, use [requirements-flights.txt](requirements-flights.txt); it installs `fast-flights` and its dependencies. For award feeds, hotels, and BnBs as well, use [requirements.txt](requirements.txt). Playwright is a dependency of the combined tracker, but flight searches do not require it or browser-binary downloads. The CLI and app run without travel-account credentials or an OpenAI API key; Codex is optional for using the agent skill.
 
+The optional **slower browser retry** needs [requirements-browser.txt](requirements-browser.txt):
+
+```bash
+.venv/bin/python -m pip install -r requirements-browser.txt
+.venv/bin/python -m playwright install chromium
+```
+
+Alternatively, select installed Google Chrome and omit the Chromium download. Both choices launch a separate **headless** browser with a fresh context; they do not connect to your open browser, use its profile, or require computer-control access. Current [Playwright system requirements](https://playwright.dev/python/docs/intro#system-requirements) list macOS 14+. Older Macs can continue using the default fast search without this option.
+
 On macOS/Linux:
 
 ```bash
@@ -49,13 +58,34 @@ The app uses Python's standard library and plain HTML/CSS/JavaScript, with no No
 
 1. Choose locations in the searchable multi-select dropdown. **Add a location** accepts a name, one or more arrival IATA airport codes, and an optional gateway note.
 2. Enter inclusive vacation days and start/end dates. Six days means Jan 1–6. The end date is the last return **departure**, not final arrival.
-3. Choose **Regular** (the CLI's lite mode, five-day departure spacing) or **Deep** (every eligible departure). **Advanced options** exposes origin airports, spacing, extra trip lengths, and optional price/connection/duration/wait limits.
-4. **Preview search plan** shows the exact number of lookups without fetching fares. **Find flights** runs the CLI sequentially and shows completed lookups plus an approximate ETA after the first lookup. Failures count as completed attempts; provider delays and retries affect ETA. **Stop search** cancels the process.
+3. Choose **Regular** or **Deep**. In the UI, regular defaults to the vacation length as the departure interval; deep defaults to daily departures. **Advanced options** exposes an optional **Departure interval** for either mode, origin airports, airlines, maximum layovers, and price/duration/wait limits. An interval of 3 checks departures on Jan 1, 4, 7, etc. Deep with an interval above 1 samples dates rather than checking every day. Vacation length and departure interval are different; additional trip lengths remain a CLI option.
+4. Fields marked **\*** are required. Empty submissions show a message and highlight the missing inputs. **Preview search plan** shows the exact number of lookups without fetching fares. **Find flights** immediately brings the progress panel above the form into view, then shows completed lookups plus an approximate ETA after the first lookup. Failures count as completed attempts; provider delays and retries affect ETA. **Stop search** cancels the process.
 5. Compare the date matrix and lowest qualifying fare, expand matching itineraries, and apply offline filters. **Save CSV** downloads the visible filtered matrix, including empty/error statuses and best-fare details. **Save JSON** retains raw candidates for later CLI filtering. Filtering does not refresh availability.
 
 Added locations persist in `~/Library/Application Support/Travel Agent/locations.json` on macOS; `--data-dir PATH` changes that folder. Additions belong to this local app and do not edit the checked-in presets. To use them directly in the CLI, add the same records to a full destination pool as described below; the local additions file is not a merged preset pool.
 
 The app serves only on `127.0.0.1`, runs one live search at a time, and executes fixed CLI commands without a shell. Refreshing the page reconnects to the active search or current results and restores the submitted search settings. Results live in temporary files until the app stops or another search replaces them; export before stopping. There is no searchable history. Search/filter/export data remains local except for the live provider requests and booking links you open. The agreed scope and verification criteria are in [docs/local-flight-ui.md](docs/local-flight-ui.md).
+
+Editing vacation length or other search settings marks the existing table as **previous results**. Click **Find flights** to fetch fares for the edited settings. The summary labels the actual trip length searched, so a saved five-day table cannot be mistaken for a new thirty-day search. A blank regular departure interval follows the vacation length; an explicit interval remains an independent sampling choice.
+
+Under **Advanced options → Missing prices**, choose **Retry in browser (slower)** and a browser engine. It is off by default. The CLI first runs the fast search, then retries only route/date combinations containing eligible unpriced itineraries. It resolves airline names from provider metadata, preserves the live layover limit, and inspects Best, View more flights, and Cheapest using fixed Playwright selectors. It reads complete framed shopping responses, including additional priced itineraries for missing carriers; an exact DOM match can also fill a quote on an existing itinerary. Regular/deep date sampling stays the same, and normal price/airline/duration/wait filters apply to recovered fares.
+
+Browser loading adds time. UI waits share a 45-second budget per retry; failures and unresolved prices are recorded in `browser_attempts` and `source_warnings`. Progress labels the browser phase, and recovered rows say **browser quote** with `price_source` and `price_checked_at` in JSON. This is a best-effort fallback: Google may return errors, challenges, or unpriced results, and its UI/data format can change. The tool does not bypass challenges or infer missing fares. Recent live headless checks did not reproduce the screenshot's priced Singapore itineraries; use the saved statuses rather than treating browser retries as complete airline coverage.
+
+### Browser regression test
+
+The optional [ui_browser_test.py](ui_browser_test.py) uses Playwright to add **Dhaka, Bangladesh (DAC)** through the UI and run a five-day regular January 2027 search from SFO, then change it to thirty days and verify the request/table use Jan 1–30. It also checks required fields, visible progress/ETA, a custom deep interval, airline filters, CSV/JSON downloads, and refresh recovery. It persists the added location and runs seven live lookups; it is separate from the offline unit suite. `--duration-change-only` reuses a completed five-day Dhaka search and runs only the one thirty-day lookup.
+
+For this developer test only, install Playwright (`.venv/bin/python -m pip install playwright`). Use an installed Chrome browser with `--browser chrome`, or download Chromium with `.venv/bin/python -m playwright install chromium` and omit that option. The app itself does not require Playwright.
+
+With the local app running:
+
+```bash
+.venv/bin/python ui_browser_test.py --live --browser chrome \
+  --output-dir /tmp/flight-ui-dhaka-check
+```
+
+Add `--headed` to watch the test in a browser window. Screenshots, exports, and the structured test report go to the output folder; keep them outside commits.
 
 ## Flight-only CLI
 
@@ -87,15 +117,25 @@ Run these commands from the repository root. No agent is needed to search, filte
 .venv/bin/python flight_tools.py filter --input /tmp/january-deep.json \
   --max-price 500 --max-stops 1 --max-duration-hours 12 --max-layover-hours 4 \
   --output /tmp/january-filtered.json --format table
+
+# Opt-in headless retry; one exact 32-day window, no agent required
+.venv/bin/python flight_tools.py search --origin SFO --dest DAC \
+  --start-date 2027-01-14 --end-date 2027-02-14 --trip-lengths 32 \
+  --airlines "Singapore Airlines" --browser-missing --browser-engine chromium \
+  --output /tmp/dhaka-browser.json --format table
 ```
 
-`--dest` accepts `all`, one destination, comma-separated names/ids, or IATA codes. Named Tokyo, Paris, and Tenerife searches compare both configured airports. Selecting `NRT` searches only Narita. `--origin` accepts one or more airports. Lite defaults to a five-day step; deep uses a one-day step. Deep checks every valid departure for each explicit length, not arbitrary return dates.
+`--dest` accepts `all`, one destination, comma-separated names/ids, or IATA codes. Named Tokyo, Paris, and Tenerife searches compare both configured airports. Selecting `NRT` searches only Narita. `--origin` accepts one or more airports. The CLI defaults to a five-day step for lite and one day for deep; `--date-step-days` overrides either mode. Deep with its default interval checks every valid departure for each explicit length, not arbitrary return dates. An interval above 1 samples departures.
+
+Use `--airlines "United,Lufthansa"` for a case-insensitive filter against exact reported carrier names in a live search or saved snapshot. For a mixed-carrier itinerary, **all reported carriers** must be in the selection; selecting only United excludes United/Lufthansa combinations. Blank means all airlines. This is a local filter that retains raw fares, so it can be cleared offline. The UI's airline fields provide suggestions from the saved raw results. Carrier labels do not certify the actual operating airline or selected return itinerary.
 
 Trip lengths count **inclusive calendar days**: six days means Jan 1–6, not Jan 1–7. January lite windows are Jan 1–6, 6–11, 11–16, 16–21, 21–26, 26–31. The end date bounds the **return departure date**; the provider does not export the selected return itinerary or its final arrival date. Returns in February require an end date in February.
 
 Prices are USD economy round-trip quotes for **one adult**. `--adults` remains an accommodation option in the combined tracker. Flight searches have **no implicit price ceiling**: configured destination thresholds and the old $2,000 discovery ceiling do not exclude fares. Use `--max-price` when a ceiling is wanted.
 
 JSON is the default stdout format; progress goes to stderr. `--progress-json` adds one JSON progress event per completed lookup on stderr for the UI and other clients. `--output` always saves structured JSON even when stdout is a table. Snapshots contain the query, timestamp, all provider-returned candidates, status for every airport/date pair, a destination/window matrix, and deterministic minima. Fares rank by price, stops, outbound elapsed time, airline, and stable itinerary fields. This retains all results exposed by the provider; it does not guarantee exhaustive airline inventory.
+
+The adapter reads both Google's best-flight and other-flight sections. Some itineraries are returned without numeric prices (including Singapore Airlines on tested SFO–Dhaka dates). These carriers and dates appear in `source_warnings` and the UI's **Itineraries without prices** notice; they are excluded from fare rankings. A missing quote does not mean the airline has no flights. Check Google Flights or the airline directly for a quote.
 
 The offline filter reads `raw_flight_deals`, so local price/duration filters can be relaxed later. A `--max-stops` restriction used during live search narrows the provider query in both directions; offline filtering cannot recover fares omitted by that query. Saved connection counts, layover waits, and durations describe **outbound travel only**. All fares are retained; there is no top-two truncation.
 
@@ -281,7 +321,7 @@ With no primary mode flag, the tracker runs cash flights, public award reports, 
   --date-range 2026-11-01:2027-01-31 --trip-lengths 4,7,10 --date-step-days 7
 ```
 
-For flight-only research, use `flight_tools.py search`: choose lite for sampling or deep for every eligible departure. The legacy month/date-range trip lengths also use inclusive calendar days.
+For flight-only research, use `flight_tools.py search`: choose lite for sampling or deep with its default one-day interval for every eligible departure. The legacy month/date-range trip lengths also use inclusive calendar days.
 
 ### Cash flights plus points research, without stays
 

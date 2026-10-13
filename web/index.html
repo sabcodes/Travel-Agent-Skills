@@ -13,13 +13,20 @@
   <header><a class="brand" href="/">↗ Travel Agent</a><span class="badge">LOCAL FLIGHT FINDER</span></header>
   <section class="intro"><p class="eyebrow">A little flexibility goes a long way.</p><h1>Find your next getaway.</h1><p>Compare destinations and dates. See where your money takes you.</p></section>
   <p id="error" class="error" role="alert" hidden></p>
+  <section id="progress-section" class="card progress-card" aria-label="Search progress" hidden>
+    <div class="progress-heading"><h2 id="progress-title">Searching flights</h2><button type="button" class="secondary" id="stop-search">Stop search</button></div>
+    <div class="progress-meta"><span id="progress-count" role="status"></span><span id="eta"></span></div>
+    <progress id="progress" max="100" value="0" aria-label="Completed airport and date searches"></progress>
+    <p id="current-route" class="hint"></p>
+  </section>
   <section class="card" aria-label="Flight search">
-    <form id="search-form">
+    <form id="search-form" novalidate>
       <fieldset id="search-fields">
         <div class="section-label">YOUR TRIP <span>Economy · round trip · USD per person</span></div>
+        <p class="required-note"><span class="required" aria-hidden="true">*</span> Required fields</p>
         <div class="trip-grid">
           <div class="field location-field">
-            <label id="locations-label">Where to?</label>
+            <label id="locations-label">Where to? <span class="required" aria-hidden="true">*</span></label>
             <details id="locations-picker" class="picker">
               <summary aria-labelledby="locations-label locations-summary"><span id="locations-summary">Choose locations</span></summary>
               <div class="picker-panel">
@@ -30,48 +37,48 @@
             </details>
             <button type="button" class="text-button" id="add-location">+ Add a location</button>
           </div>
-          <label class="field">Vacation length <div class="input-suffix"><input id="duration" type="number" value="6" min="2" step="1" required><span>days</span></div><small>Inclusive calendar days</small></label>
-          <label class="field">Start date<input id="start-date" type="date" required></label>
-          <label class="field">End date<input id="end-date" type="date" required><small>Last return departure</small></label>
+          <label class="field"><span>Vacation length <span class="required" aria-hidden="true">*</span></span><div class="input-suffix"><input id="duration" type="number" value="6" min="2" step="1" required><span>days</span></div><small>Inclusive calendar days</small></label>
+          <label class="field"><span>Start date <span class="required" aria-hidden="true">*</span></span><input id="start-date" type="date" required></label>
+          <label class="field"><span>End date <span class="required" aria-hidden="true">*</span></span><input id="end-date" type="date" required><small>Last return departure</small></label>
         </div>
         <div class="mode-row">
           <div class="mode-options" role="group" aria-label="Search depth">
             <label><input type="radio" name="mode" value="lite" checked><span>Regular <small>Sample dates</small></span></label>
-            <label><input type="radio" name="mode" value="deep"><span>Deep <small>Every departure</small></span></label>
+            <label><input type="radio" name="mode" value="deep"><span>Deep <small>Daily by default</small></span></label>
           </div>
-          <p id="mode-help">One departure every 5 days.</p>
+          <p id="mode-help">One departure every 6 days.</p>
         </div>
         <details class="advanced"><summary>Advanced options</summary>
           <div class="advanced-grid">
-            <label class="field">Origin airport(s)<input id="origin" value="SFO" placeholder="SFO, SJC" required></label>
-            <label class="field">Regular spacing (days)<input id="date-step" type="number" value="5" min="1" step="1"></label>
-            <label class="field">Additional trip lengths<input id="extra-lengths" placeholder="e.g. 7, 8, 9"><small>Inclusive days, comma-separated</small></label>
+            <label class="field"><span>Origin airport(s) <span class="required" aria-hidden="true">*</span></span><input id="origin" value="SFO" placeholder="SFO, SJC" required></label>
+            <label class="field">Departure interval (days)<input id="date-step" type="number" min="1" step="1" placeholder="6"><small>Days between departures checked; 3 checks Jan 1, 4, 7… Blank = vacation length for regular, 1 for deep.</small></label>
+            <label class="field">Maximum layovers<select id="search-max-stops"><option value="">No limit</option><option value="0">Nonstop</option><option value="1">1 layover</option><option value="2">2 layovers</option><option value="3">3 layovers</option><option value="4">4 layovers</option></select></label>
+            <label class="field">Airlines<input id="search-airlines" list="airline-options" placeholder="All airlines"><small>Comma-separated carrier names</small></label>
             <label class="field">Price ceiling (USD)<input id="search-max-price" type="number" min="0.01" step="0.01" placeholder="No limit"></label>
-            <label class="field">Maximum connections<select id="search-max-stops"><option value="">No limit</option><option value="0">Nonstop</option><option value="1">1 connection</option><option value="2">2 connections</option><option value="3">3 connections</option><option value="4">4 connections</option></select></label>
             <label class="field">Outbound duration (hours)<input id="search-max-duration-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
             <label class="field">Connection wait (hours)<input id="search-max-layover-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
+            <label class="field">Missing prices<select id="browser-missing"><option value="">Keep fast search</option><option value="on">Retry in browser (slower)</option></select><small>Experimental headless retry for unpriced itineraries. Adds browser loading time; prices may remain unavailable. Requires optional browser setup.</small></label>
+            <label class="field">Browser for retries<select id="browser-engine"><option value="chromium">Downloaded Chromium</option><option value="chrome">Installed Google Chrome</option></select></label>
           </div>
-          <p class="hint">A live connection limit restricts the provider search. Duration and wait limits describe outbound travel.</p>
+          <p class="hint">A live layover limit restricts the provider search. Duration and wait limits describe outbound travel. Airline filters require every reported carrier to be selected.</p>
         </details>
         <div class="search-footer"><div><button type="button" class="text-button" id="preview">Preview search plan</button><span id="plan" role="status"></span></div><button class="primary" id="search-button" type="submit">Find flights <span aria-hidden="true">↗</span></button></div>
       </fieldset>
     </form>
   </section>
-  <section id="progress-section" class="card progress-card" aria-label="Search progress" hidden>
-    <div class="progress-heading"><h2 id="progress-title">Searching flights</h2><button type="button" class="secondary" id="stop-search">Stop search</button></div>
-    <div class="progress-meta"><span id="progress-count" role="status"></span><span id="eta"></span></div>
-    <progress id="progress" max="100" value="0" aria-label="Completed airport and date searches"></progress>
-    <p id="current-route" class="hint"></p>
-  </section>
   <section id="results" hidden>
+    <p id="settings-changed" class="notice" role="status" hidden></p>
     <div class="results-heading"><div><p class="eyebrow">YOUR OPTIONS</p><h2>The fares are in.</h2><p id="result-meta"></p></div><div class="downloads"><a class="secondary" href="/api/export.csv" download>Save CSV ↓</a><a class="text-button" href="/api/export.json" download>Save JSON</a></div></div>
     <div id="best-fare" class="best-fare"></div>
+    <p id="unpriced-notice" class="notice" hidden></p>
+    <p id="browser-retry-summary" class="notice" hidden></p>
     <section class="card results-card">
       <form id="filter-form">
         <div class="section-label">FILTER RESULTS <span>Uses saved fares · no new search</span></div>
         <div class="filter-grid">
           <label class="field">Maximum price (USD)<input id="filter-max-price" type="number" min="0.01" step="0.01" placeholder="No limit"></label>
-          <label class="field">Maximum connections<select id="filter-max-stops"><option value="">No limit</option><option value="0">Nonstop</option><option value="1">1 connection</option><option value="2">2 connections</option><option value="3">3 connections</option><option value="4">4 connections</option></select></label>
+          <label class="field">Maximum layovers<select id="filter-max-stops"><option value="">No limit</option><option value="0">Nonstop</option><option value="1">1 layover</option><option value="2">2 layovers</option><option value="3">3 layovers</option><option value="4">4 layovers</option></select></label>
+          <label class="field">Airlines<input id="filter-airlines" list="airline-options" placeholder="All airlines"><small>Comma-separated carrier names</small></label>
           <label class="field">Outbound duration (hours)<input id="filter-max-duration-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
           <label class="field">Connection wait (hours)<input id="filter-max-layover-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
           <div class="filter-buttons"><button type="submit" class="secondary" id="apply-filters">Apply</button><button type="button" class="text-button" id="reset-filters">Clear</button></div>
@@ -84,9 +91,11 @@
     </section>
     <details class="card fare-details"><summary id="fares-summary">Matching flights</summary><div class="table-scroll" tabindex="0" role="region" aria-label="Matching flight itineraries"><table id="fares"></table></div></details>
     <details id="source-errors" class="card fare-details" hidden><summary id="errors-summary">Source errors</summary><ul id="error-list"></ul></details>
+    <details id="source-warnings" class="card fare-details" hidden><summary>Itineraries without prices</summary><ul id="warning-list"></ul></details>
     <p class="footnote">Quotes can change. Connections, waits, and durations describe outbound travel; selected return legs are unavailable. Gateway fares exclude onward transport. Booking links open a search, not a held ticket.</p>
   </section>
   <footer>Runs on your Mac. Powered by the flight search CLI.</footer>
+  <datalist id="airline-options"></datalist>
 </main>
 <dialog id="location-dialog" aria-labelledby="add-title">
   <form id="location-form">

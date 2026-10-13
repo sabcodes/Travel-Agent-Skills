@@ -62,13 +62,18 @@ def select_destinations(pool, selection):
 
 
 def filter_fares(fares, *, airports=None, origins=None, max_price=None, max_stops=None,
-                 max_duration_hours=None, max_layover_hours=None):
+                 max_duration_hours=None, max_layover_hours=None, airlines=None):
+    selected_airlines = {name.strip().casefold() for name in airlines} if airlines else None
     result = []
     for fare in fares:
         if airports is not None and fare["destination"] not in airports:
             continue
         if origins is not None and fare["origin"] not in origins:
             continue
+        if selected_airlines is not None:
+            carriers = {name.strip().casefold() for name in fare.get("airline", "").split(",") if name.strip()}
+            if not carriers or not carriers.issubset(selected_airlines):
+                continue
         if max_price is not None and float(fare["price"]) > max_price:
             continue
         if max_stops is not None and (fare.get("stops") is None or fare["stops"] > max_stops):
@@ -142,10 +147,18 @@ def render_table(payload):
         best = row["cheapest"]
         cheapest = f'${best["price"]:,.2f} ({best["departure_date"]} → {best["return_date"]})' if best else "—"
         lines.append("| " + " | ".join([f'{row["destination_name"]} / {row["origin"]}', *values, cheapest]) + " |")
+    warnings = payload.get("source_warnings", [])
+    if warnings:
+        carriers = sorted({name for warning in warnings for name in warning["airlines"]})
+        lines.append("\nPrices unavailable for some returned itineraries: " + ", ".join(carriers) + ". These are excluded from fare comparisons.")
+    attempts = payload.get("browser_attempts", [])
+    if attempts:
+        lines.append(f"\nBrowser retries: {len(attempts)} route/date checks; {sum(a['recovered'] for a in attempts)} quotes recovered; {sum(a['status'] == 'unavailable' for a in attempts)} failed or timed out.")
     return "\n".join(lines)
 
 
 def add_filters(parser):
+    parser.add_argument("--airlines", help="Comma-separated reported airline names; all carriers must match, case-insensitively")
     parser.add_argument("--max-price", type=float, help="Optional USD per-person round-trip ceiling; default unlimited")
     parser.add_argument("--max-stops", "--max-layovers", type=int, help="Maximum outbound connections; search also requests this limit on both directions")
     parser.add_argument("--max-duration-hours", type=float, help="Maximum outbound elapsed journey hours")
@@ -161,7 +174,7 @@ def main(argv=None):
     search.add_argument("--start-date", required=True)
     search.add_argument("--end-date", required=True, help="Last allowed return-departure date")
     search.add_argument("--mode", choices=["lite", "deep"], default="lite")
-    search.add_argument("--date-step-days", type=int, default=None, help="Lite spacing, default 5; deep always uses 1")
+    search.add_argument("--date-step-days", type=int, default=None, help="Departure spacing for either mode; default 5 for lite, 1 for deep")
     search.add_argument("--trip-lengths", default="6", help="Comma-separated inclusive calendar days, e.g. 5,6")
     search.add_argument("--pool", default=str(ROOT / "flight_destinations.json"))
     search.add_argument("--config", default=str(ROOT / "config.json"))
@@ -169,6 +182,8 @@ def main(argv=None):
     search.add_argument("--origin", default="SFO", help="Comma-separated origin airport codes")
     search.add_argument("--dry-run", action="store_true", help="Emit the complete search plan without network requests")
     search.add_argument("--progress-json", action="store_true", help="Emit one structured progress event per lookup on stderr")
+    search.add_argument("--browser-missing", action="store_true", help="Slower optional Playwright retry for unpriced itineraries only")
+    search.add_argument("--browser-engine", choices=["chromium", "chrome"], default="chromium", help="Browser fallback engine; chrome uses installed Google Chrome")
     saved = commands.add_parser("filter", help="Filter and rank a saved search without network requests")
     saved.add_argument("--input", required=True)
     saved.add_argument("--dest", help="Saved destination ids/names or airport codes")
@@ -186,15 +201,15 @@ def main(argv=None):
         for name, value in limits.items():
             if value is not None and (not math.isfinite(value) or value < 0 or (name == "max_price" and value == 0)):
                 raise ValueError(f"{name.replace('_', '-')} must be finite and nonnegative (price must be positive)")
+        airlines = list(dict.fromkeys(name.strip() for name in args.airlines.split(",") if name.strip())) if args.airlines else None
+        if args.airlines and not airlines:
+            raise ValueError("airlines must include at least one carrier name")
+        limits["airlines"] = airlines
         origins = list(dict.fromkeys(code.strip().upper() for code in args.origin.split(","))) if args.origin else None
         if origins and any(not re.fullmatch(r"[A-Z]{3}", code) for code in origins):
             raise ValueError("origins must be three-letter IATA codes")
         if args.command == "search":
-            step = args.date_step_days if args.date_step_days is not None else 5
-            if args.mode == "deep":
-                if args.date_step_days not in (None, 1):
-                    raise ValueError("deep searches use a one-day step; omit --date-step-days or set it to 1")
-                step = 1
+            step = args.date_step_days if args.date_step_days is not None else (1 if args.mode == "deep" else 5)
             lengths = sorted(set(int(v.strip()) for v in args.trip_lengths.split(",")))
             pairs = generate_date_pairs_between(args.start_date, args.end_date, lengths, step)
             selected = select_destinations(load_pool(args.pool), args.dest)
@@ -205,17 +220,19 @@ def main(argv=None):
                                  "trip_lengths": lengths, "date_pairs": pairs, "day_count": "inclusive",
                                  "currency": "USD", "cabin": "economy", "flight_passengers": 1,
                                  "price_basis": "per_person", "filters": limits},
-                       "source_errors": [], "searches": [], "flight_deals": [],
+                       "source_errors": [], "source_warnings": [], "browser_attempts": [], "searches": [], "flight_deals": [],
                        "limitations": ["Connection counts, waits, and durations describe outbound legs; selected return legs are unavailable.",
                                        "The end date bounds return departure, not final arrival back at the origin.",
                                        "Gateway fares exclude onward transport; prices can change before booking."]}
+            payload["query"].update(browser_missing=args.browser_missing, browser_engine=args.browser_engine)
             if args.dry_run:
                 payload["searches"] = [{"origin": o, "destination": a, "departure_date": dep, "return_date": ret,
                                         "status": "planned", "fare_count": 0} for o in origins for a in airports for dep, ret in pairs]
             else:
                 payload["flight_deals"] = scan_flights(config_path=args.config, origins=origins, destinations=airports,
                     date_pairs=pairs, max_price=None, max_stops=args.max_stops,
-                    source_errors=payload["source_errors"], search_records=payload["searches"],
+                    source_errors=payload["source_errors"], source_warnings=payload["source_warnings"], search_records=payload["searches"],
+                    browser_missing=args.browser_missing, browser_engine=args.browser_engine, browser_attempts=payload["browser_attempts"], browser_airlines=airlines,
                     progress_callback=(lambda event: print(json.dumps({"event": "progress", **event}), file=sys.stderr, flush=True)) if args.progress_json else None)
                 for fare in payload["flight_deals"]:
                     location = next(d for d in selected if fare["destination"] in d["airports"])
@@ -234,6 +251,8 @@ def main(argv=None):
             payload["query"]["origins"] = origins
             payload["searches"] = [s for s in payload["searches"] if s["origin"] in origins and s["destination"] in airports]
             payload["source_errors"] = [e for e in payload["source_errors"] if e.get("origin") in origins and e.get("destination") in airports]
+            payload["source_warnings"] = [w for w in payload.get("source_warnings", []) if w.get("origin") in origins and w.get("destination") in airports]
+            payload["browser_attempts"] = [a for a in payload.get("browser_attempts", []) if a.get("origin") in origins and a.get("destination") in airports]
             payload["applied_filters"] = limits
         # Retain raw candidates so a later offline filter can relax previous local filters.
         raw = payload.get("raw_flight_deals", payload["flight_deals"])

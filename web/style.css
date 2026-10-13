@@ -18,6 +18,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .trip-grid { display: grid; grid-template-columns: 1.5fr .8fr 1fr 1fr; gap: 18px; }
 .field { display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 550; min-width: 0; }
 .field small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.required { color: #a84939; font-weight: 700; }
+.required-note { color: var(--muted); font-size: 11px; margin: -14px 0 18px; }
+.invalid { border-color: #bd5948 !important; background: #fff7f4 !important; }
 input, select, .picker > summary { font: inherit; color: var(--ink); width: 100%; border: 1px solid #cfdad2; border-radius: 8px; padding: 11px 12px; background: #fff; min-height: 44px; }
 input::placeholder { color: #89968e; }
 input[type="checkbox"], input[type="radio"] { width: 16px; min-height: 16px; height: 16px; accent-color: var(--green); margin: 0; flex-shrink: 0; }
@@ -62,6 +65,7 @@ summary { cursor: pointer; }
 .search-footer > div { display: flex; gap: 16px; align-items: center; }
 #plan { font-size: 12px; color: var(--muted); }
 .progress-heading h2 { font-size: 17px; }
+.progress-card { scroll-margin-top: 18px; }
 .progress-meta { margin: 17px 0 10px; font-size: 12px; color: var(--muted); }
 progress { width: 100%; height: 8px; border: 0; border-radius: 10px; overflow: hidden; background: #e8eeea; accent-color: var(--green); display: block; }
 progress::-webkit-progress-bar { background: #e8eeea; border-radius: 10px; }
@@ -77,7 +81,7 @@ progress::-moz-progress-bar { background: var(--green); }
 .best-fare .best-info { flex: 1; }
 .best-fare p { margin: 0; font-size: 12px; color: var(--muted); }
 .best-fare strong { display: block; margin-bottom: 2px; font-size: 16px; }
-.filter-grid { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 14px; align-items: end; }
+.filter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: end; }
 .filter-buttons { display: flex; align-items: center; gap: 12px; padding-bottom: 2px; }
 .table-heading { margin: 28px 0 14px; }
 .table-heading span { color: var(--muted); font-size: 11px; }
@@ -98,6 +102,7 @@ tbody tr:hover > * { background: #f9fcf9; }
 .footnote { margin: 20px 5px; }
 footer { color: var(--muted); font-size: 11px; text-align: center; padding: 26px 0 6px; }
 .error { color: #973c32; background: #fff0eb; border: 1px solid #ebc9bf; border-radius: 10px; padding: 12px 16px; white-space: pre-wrap; }
+.notice { color: #6c5523; background: #fff8e5; border: 1px solid #e7d8aa; border-radius: 10px; padding: 12px 16px; }
 dialog { border: 1px solid var(--line); border-radius: 16px; padding: 28px; max-width: 450px; width: calc(100% - 32px); color: var(--ink); box-shadow: 0 24px 80px #18392f30; }
 dialog::backdrop { background: #17382e55; }
 dialog h2 { font-size: 23px; }

@@ -4,8 +4,10 @@ import csv
 import io
 import json
 import math
+import os
 import re
 import secrets
+import signal
 import subprocess
 import sys
 import tempfile
@@ -20,6 +22,19 @@ from urllib.parse import urlsplit
 from flight_tools import ROOT, load_pool, normalized
 
 LIMITS = ("max_price", "max_stops", "max_duration_hours", "max_layover_hours")
+
+
+def stop_process(process, force=False):
+    """Stop the CLI and its optional browser children in their own session."""
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
+        elif force:
+            process.kill()
+        else:
+            process.terminate()
+    except ProcessLookupError:
+        pass
 
 
 def cli(arguments, timeout=30):
@@ -47,6 +62,11 @@ def filter_arguments(values):
                 raise ValueError("Connections must be a whole number")
             value = int(number)
         arguments.extend(["--" + key.replace("_", "-"), str(value)])
+    airlines = values.get("airlines")
+    if airlines not in (None, ""):
+        if not isinstance(airlines, str) or len(airlines) > 1000 or not any(name.strip() for name in airlines.split(",")):
+            raise ValueError("Enter comma-separated airline names")
+        arguments.extend(["--airlines", airlines])
     return arguments
 
 
@@ -68,11 +88,20 @@ def search_arguments(values, pool):
     arguments = ["search", "--origin", origins, "--dest", ",".join(destinations),
                  "--start-date", str(values.get("start_date", "")),
                  "--end-date", str(values.get("end_date", "")), "--trip-lengths", lengths, "--mode", mode]
-    if mode == "lite":
-        step = str(values.get("date_step_days", "5"))
-        if not re.fullmatch(r"[1-9]\d*", step):
-            raise ValueError("Departure spacing must be a positive whole number")
-        arguments.extend(["--date-step-days", step])
+    step = values.get("date_step_days")
+    step = str(step) if step not in (None, "") else ("1" if mode == "deep" else lengths.split(",")[0])
+    if not re.fullmatch(r"[1-9]\d*", step):
+        raise ValueError("Departure interval must be a positive whole number")
+    arguments.extend(["--date-step-days", step])
+    browser_missing = values.get("browser_missing", False)
+    if not isinstance(browser_missing, bool):
+        raise ValueError("Browser retry must be on or off")
+    engine = values.get("browser_engine", "chromium")
+    if engine not in ("chromium", "chrome"):
+        raise ValueError("Choose Chromium or installed Chrome")
+    if browser_missing:
+        arguments.append("--browser-missing")
+    arguments.extend(["--browser-engine", engine])
     return arguments + filter_arguments(values)
 
 
@@ -88,7 +117,7 @@ def csv_table(payload):
     windows = payload["query"]["date_pairs"]
     writer.writerow(["Destination", "Origin", "Airports", *[f"{d} to {r} (USD)" for d, r in windows],
                      "Cheapest USD", "Departure", "Return departure", "Airline", "Outbound connections",
-                     "Outbound duration", "Gateway note", "Checked at", "Booking URL"])
+                     "Outbound duration", "Gateway note", "Checked at", "Booking URL", "Quote source", "Quote checked at"])
     for row in payload["matrix"]:
         best = row["cheapest"] or {}
         cells = [f'{cell["cheapest"]["price"]:.2f}' + (" (partial)" if cell["status"] == "partial" else "")
@@ -96,7 +125,8 @@ def csv_table(payload):
         writer.writerow([safe(v) for v in [row["destination_name"], row["origin"], ",".join(row["airports"]),
                          *cells, best.get("price", ""), best.get("departure_date", ""), best.get("return_date", ""),
                          best.get("airline", ""), best.get("stops", ""), best.get("total_journey_duration", ""),
-                         row.get("gateway_note", ""), payload.get("checked_at", ""), best.get("booking_url", "")]])
+                         row.get("gateway_note", ""), payload.get("checked_at", ""), best.get("booking_url", ""),
+                         best.get("price_source", "google_flights") if best else "", best.get("price_checked_at", payload.get("checked_at", "")) if best else ""]])
     return stream.getvalue().encode("utf-8-sig")
 
 
@@ -178,7 +208,8 @@ class App:
                 if job["cancelled"]:
                     return
                 process = subprocess.Popen([sys.executable, "-u", str(ROOT / "flight_tools.py"), *arguments],
-                                           cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                                           cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+                                           start_new_session=os.name == "posix")
                 self.process = process
             for line in process.stderr:
                 try:
@@ -191,6 +222,9 @@ class App:
                     with self.lock:
                         job["completed"] = event["completed"]
                         job["current"] = f'{event["origin"]} → {event["destination"]} · {event["departure_date"]} to {event["return_date"]}'
+                elif event.get("event") == "phase" and event.get("phase") == "browser":
+                    with self.lock:
+                        job["current"] = f'Browser retry (slower) · {event["origin"]} → {event["destination"]} · {event["departure_date"]} to {event["return_date"]}'
             code = process.wait()
             process.stderr.close()
             with self.lock:
@@ -249,7 +283,7 @@ class App:
             if self.job and self.job["status"] == "running":
                 self.job["cancelled"] = True
                 if self.process and self.process.poll() is None:
-                    self.process.terminate()
+                    stop_process(self.process)
         return self.state()
 
     def close(self):
@@ -257,7 +291,7 @@ class App:
         if self.worker:
             self.worker.join(timeout=5)
         if self.process and self.process.poll() is None:
-            self.process.kill()
+            stop_process(self.process, force=True)
             if self.worker:
                 self.worker.join(timeout=5)
         self.temp.cleanup()

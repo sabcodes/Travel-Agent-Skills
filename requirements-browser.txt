@@ -1,0 +1,3 @@
+# Optional slower browser fallback; the default flight search does not need it.
+-r requirements-flights.txt
+playwright>=1.62,<2

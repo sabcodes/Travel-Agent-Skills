@@ -1,12 +1,14 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
-const limitNames = ["max_price", "max_stops", "max_duration_hours", "max_layover_hours"];
+const limitNames = ["max_price", "max_stops", "max_duration_hours", "max_layover_hours", "airlines"];
 const selected = new Set(["cancun", "maui"]);
 let pool = [];
 let polling = null;
 let renderedJob = null;
 let filterBusy = false;
+let submittedSettings = null;
+let displayedTripDays = null;
 
 async function api(path, values) {
   const options = values === undefined ? {} : {
@@ -61,19 +63,25 @@ function filters(prefix) {
 
 function query() {
   const duration = $("duration").value;
-  const extra = $("extra-lengths").value.trim();
   return {
     destinations: [...selected], start_date: $("start-date").value, end_date: $("end-date").value,
-    trip_lengths: duration + (extra ? "," + extra : ""),
+    trip_lengths: duration,
     mode: document.querySelector('input[name="mode"]:checked').value,
-    origin: $("origin").value, date_step_days: $("date-step").value, ...filters("search")
+    origin: $("origin").value, date_step_days: $("date-step").value, ...filters("search"),
+    browser_missing: $("browser-missing").value === "on", browser_engine: $("browser-engine").value
   };
 }
 
 function updateSelection() {
   const names = pool.filter(location => selected.has(location.id)).map(location => location.name);
   $("locations-summary").textContent = names.length === 0 ? "Choose locations" : names.length <= 2 ? names.join(", ") : `${names.length} locations selected`;
+  if (names.length) {
+    const summary = document.querySelector("#locations-picker > summary");
+    summary.classList.remove("invalid");
+    summary.removeAttribute("aria-invalid");
+  }
   $("plan").textContent = "";
+  markSettingsChanged();
 }
 
 function renderPicker() {
@@ -102,9 +110,43 @@ function renderPicker() {
 
 function updateMode() {
   const deep = document.querySelector('input[name="mode"]:checked').value === "deep";
-  $("date-step").disabled = deep;
-  $("mode-help").textContent = deep ? "Every eligible departure for each trip length." : `One departure every ${$("date-step").value || 5} days.`;
+  const fallback = deep ? 1 : $("duration").value;
+  const step = $("date-step").value || fallback;
+  $("date-step").placeholder = String(fallback || "Vacation length");
+  const trip = `${$("duration").value || "—"}-day trips`;
+  $("mode-help").textContent = String(step) === "1" ? `${trip} · every departure day.` : `${trip} · departures every ${step || "vacation-length"} days${deep ? " · sampled deep search" : ""}.`;
   $("plan").textContent = "";
+  markSettingsChanged();
+}
+
+function markSettingsChanged() {
+  const changed = submittedSettings !== null && JSON.stringify(query()) !== submittedSettings;
+  $("settings-changed").hidden = !changed || $("results").hidden;
+  $("settings-changed").textContent = changed ? `Search settings changed. Click Find flights to run the ${$("duration").value || "new"}-day search. The table below is from your previous ${displayedTripDays || "saved"}-day search.` : "";
+}
+
+function validateSearch() {
+  const missing = [], invalid = [];
+  const labels = {duration: "Vacation length", "start-date": "Start date", "end-date": "End date", origin: "Origin airport(s)"};
+  const summary = document.querySelector("#locations-picker > summary");
+  summary.classList.toggle("invalid", !selected.size);
+  if (!selected.size) { missing.push("Locations"); summary.setAttribute("aria-invalid", "true"); }
+  else summary.removeAttribute("aria-invalid");
+  for (const input of $("search-form").querySelectorAll("input, select")) {
+    const bad = !input.validity.valid;
+    input.classList.toggle("invalid", bad);
+    if (bad) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
+    if (input.required && !input.value.trim()) missing.push(labels[input.id] || input.id);
+    else if (bad) invalid.push(input);
+  }
+  if (missing.length || invalid.length) {
+    showError(missing.length ? `Please fill out the required fields: ${missing.join(", ")}.` : "Please check the highlighted fields. Vacation length must be a whole number of at least 2 days; limits must use valid numbers.");
+    if (missing.includes("Origin airport(s)")) document.querySelector(".advanced").open = true;
+    $("error").scrollIntoView({block: "nearest"});
+    return false;
+  }
+  return true;
 }
 
 function seconds(value) {
@@ -117,9 +159,10 @@ function renderProgress(state) {
   $("search-fields").disabled = active;
   $("progress-section").hidden = state.status === "idle";
   $("stop-search").hidden = !active;
-  $("progress").value = state.total ? state.completed / state.total * 100 : 0;
-  $("progress-count").textContent = `${state.completed || 0} / ${state.total || 0} searches · ${seconds(state.elapsed_seconds || 0)} elapsed`;
-  const finishing = active && state.completed === state.total;
+  if (active && !state.total) $("progress").removeAttribute("value");
+  else $("progress").value = state.total ? state.completed / state.total * 100 : 0;
+  $("progress-count").textContent = active && !state.total ? "Preparing the search plan…" : `${state.completed || 0} / ${state.total || 0} searches · ${seconds(state.elapsed_seconds || 0)} elapsed`;
+  const finishing = active && state.total > 0 && state.completed === state.total;
   $("eta").textContent = active ? finishing ? "Building your table…" : state.eta_seconds === null ? "ETA after the first lookup" : `About ${seconds(state.eta_seconds)} left` : "";
   $("current-route").textContent = state.current || "";
   $("progress-title").textContent = {running: "Searching flights", done: "Search complete", partial: "Search complete · some sources failed", cancelled: "Search stopped", error: "Search could not finish"}[state.status] || "Search progress";
@@ -131,11 +174,13 @@ function restoreQuery(values) {
   $("start-date").value = values.start_date;
   $("end-date").value = values.end_date;
   $("duration").value = values.trip_lengths[0];
-  $("extra-lengths").value = values.trip_lengths.slice(1).join(", ");
+  $("browser-missing").value = values.browser_missing ? "on" : "";
+  $("browser-engine").value = values.browser_engine || "chromium";
   $("origin").value = values.origins.join(", ");
-  $("date-step").value = values.mode === "deep" ? 5 : values.date_step_days;
+  const defaultStep = values.mode === "deep" ? 1 : values.trip_lengths[0];
+  $("date-step").value = values.date_step_days === defaultStep ? "" : values.date_step_days;
   document.querySelector(`input[name="mode"][value="${values.mode}"]`).checked = true;
-  for (const key of limitNames) $("search-" + key.replaceAll("_", "-")).value = values.filters[key] ?? "";
+  for (const key of limitNames) $("search-" + key.replaceAll("_", "-")).value = Array.isArray(values.filters[key]) ? values.filters[key].join(", ") : values.filters[key] ?? "";
   renderPicker();
   updateMode();
 }
@@ -144,7 +189,10 @@ async function poll(restore = false) {
   clearTimeout(polling);
   try {
     const state = await api("/api/state");
-    if (restore && state.query) restoreQuery(state.query);
+    if (restore && state.query) {
+      restoreQuery(state.query);
+      submittedSettings = JSON.stringify(query());
+    }
     renderProgress(state);
     if (state.status === "running") {
       polling = setTimeout(poll, 1000);
@@ -176,20 +224,26 @@ function tableHead(table, headings) {
 
 function renderResults(payload, setFilters = false) {
   $("results").hidden = false;
+  displayedTripDays = payload.query.trip_lengths.join("/");
+  markSettingsChanged();
   if (setFilters) {
     const values = payload.applied_filters || payload.query.filters;
-    for (const key of limitNames) $("filter-" + key.replaceAll("_", "-")).value = values[key] ?? "";
+    for (const key of limitNames) $("filter-" + key.replaceAll("_", "-")).value = Array.isArray(values[key]) ? values[key].join(", ") : values[key] ?? "";
   }
+  const warnings = payload.source_warnings || [];
+  const unpricedCarriers = [...new Set(warnings.flatMap(warning => warning.airlines))].sort();
+  const carriers = [...new Set([...(payload.raw_flight_deals || payload.flight_deals).flatMap(fare => (fare.airline || "").split(",").map(name => name.trim()).filter(Boolean)), ...unpricedCarriers])].sort();
+  $("airline-options").replaceChildren(...carriers.map(carrier => { const option = node("option"); option.value = carrier; return option; }));
   const dateRange = `${payload.query.start_date} – ${payload.query.end_date}`;
   const quoted = payload.checked_at ? new Date(payload.checked_at).toLocaleString() : "not fetched";
-  $("result-meta").textContent = `${payload.summary.total_flight_deals} matching fares · ${dateRange} · quoted ${quoted}`;
+  $("result-meta").textContent = `${displayedTripDays}-day trips · ${payload.summary.total_flight_deals} matching fares · ${dateRange} · quoted ${quoted}`;
   const banner = $("best-fare");
   banner.replaceChildren();
   const best = payload.cheapest;
   if (best) {
     const info = node("div", undefined, "best-info");
     info.append(node("p", "LOWEST QUALIFYING FARE"), node("strong", `${best.destination_name || best.destination} · ${best.origin} → ${best.destination}`),
-      node("p", `${best.departure_date} → ${best.return_date} · ${best.airline} · ${best.stops === 0 ? "Nonstop" : `${best.stops} outbound connection(s)`} · ${best.total_journey_duration}`));
+      node("p", `${best.departure_date} → ${best.return_date} · ${best.airline} · ${best.stops === 0 ? "Nonstop" : `${best.stops} outbound connection(s)`} · ${best.total_journey_duration}${best.price_source === "google_flights_browser" ? " · browser quote" : ""}`));
     if (best.gateway_note) info.append(node("p", best.gateway_note));
     banner.append(node("span", money(best.price), "best-price"), info, bookingLink(best, "View flight ↗"));
   } else {
@@ -227,7 +281,7 @@ function renderResults(payload, setFilters = false) {
   const fareBody = tableHead($("fares"), ["Destination / airports", "Dates", "Price", "Airline", "Outbound connections", "Outbound duration", "Flight"]);
   for (const fare of payload.flight_deals) {
     const tr = node("tr");
-    for (const value of [`${fare.destination_name || fare.destination} (${fare.origin} → ${fare.destination})`, `${fare.departure_date} → ${fare.return_date}`, money(fare.price), fare.airline, fare.stops, fare.total_journey_duration]) tr.append(node("td", value));
+    for (const value of [`${fare.destination_name || fare.destination} (${fare.origin} → ${fare.destination})`, `${fare.departure_date} → ${fare.return_date}`, money(fare.price) + (fare.price_source === "google_flights_browser" ? " · browser quote" : ""), fare.airline, fare.stops, fare.total_journey_duration]) tr.append(node("td", value));
     const booking = node("td");
     booking.append(bookingLink(fare, "View ↗"));
     tr.append(booking);
@@ -238,33 +292,48 @@ function renderResults(payload, setFilters = false) {
   $("source-errors").hidden = !payload.source_errors.length;
   $("errors-summary").textContent = `${payload.source_errors.length} source lookup(s) failed`;
   $("error-list").replaceChildren(...payload.source_errors.map(error => node("li", `${error.origin} → ${error.destination} · ${error.departure_date}: ${error.message}`)));
+  $("unpriced-notice").hidden = !warnings.length;
+  $("unpriced-notice").textContent = `Google returned some itineraries without prices for ${unpricedCarriers.join(", ")}. These cannot be compared by price. Open “Itineraries without prices” for dates; check Google Flights or the airline for a quote.`;
+  $("source-warnings").hidden = !warnings.length;
+  $("warning-list").replaceChildren(...warnings.map(warning => node("li", `${warning.origin} → ${warning.destination} · ${warning.departure_date} → ${warning.return_date} · ${warning.airlines.join(", ")}: price unavailable`)));
+  const attempts = payload.browser_attempts || [];
+  $("browser-retry-summary").hidden = !payload.query.browser_missing;
+  $("browser-retry-summary").textContent = attempts.length ? `Browser retries: ${attempts.length} date/route checks · ${attempts.reduce((total, attempt) => total + attempt.recovered, 0)} quotes recovered. ${attempts.filter(attempt => attempt.status === "unavailable").length} checks failed or timed out. Unresolved prices remain unavailable.` : "Browser retries were enabled; no eligible unpriced itineraries needed a retry.";
 }
 
 $("search-form").addEventListener("submit", async event => {
   event.preventDefault();
   showError(null);
+  if (!validateSearch()) return;
+  const values = query();
   $("locations-picker").open = false;
-  $("search-fields").disabled = true;
+  renderProgress({status: "running", completed: 0, total: 0, elapsed_seconds: 0, eta_seconds: null, current: "Preparing your search…"});
+  $("stop-search").disabled = true;
+  $("stop-search").textContent = "Preparing…";
+  $("progress-section").scrollIntoView({block: "start"});
   try {
-    const state = await api("/api/search", query());
+    const state = await api("/api/search", values);
+    submittedSettings = JSON.stringify(values);
     $("results").hidden = true;
+    markSettingsChanged();
     $("stop-search").disabled = false;
     $("stop-search").textContent = "Stop search";
     renderProgress(state);
     await poll();
   } catch (error) {
     $("search-fields").disabled = false;
+    $("progress-section").hidden = true;
     showError(error);
   }
 });
 
 $("preview").addEventListener("click", async () => {
-  if (!$("search-form").reportValidity()) return;
   showError(null);
+  if (!validateSearch()) return;
   $("preview").disabled = true;
   try {
     const plan = await api("/api/plan", query());
-    $("plan").textContent = `${plan.total} searches · ${plan.windows} date windows`;
+    $("plan").textContent = `${plan.total} ${plan.total === 1 ? "search" : "searches"} · ${plan.windows} date ${plan.windows === 1 ? "window" : "windows"}`;
   } catch (error) { showError(error); }
   finally { $("preview").disabled = false; }
 });
@@ -299,7 +368,10 @@ $("clear-locations").addEventListener("click", () => { selected.clear(); renderP
 document.addEventListener("click", event => { if (!$("locations-picker").contains(event.target)) $("locations-picker").open = false; });
 document.addEventListener("keydown", event => { if (event.key === "Escape") $("locations-picker").open = false; });
 $("search-form").addEventListener("change", updateMode);
-$("search-form").addEventListener("input", () => { $("plan").textContent = ""; });
+$("search-form").addEventListener("input", event => {
+  updateMode();
+  if (event.target.validity?.valid) { event.target.classList.remove("invalid"); event.target.removeAttribute("aria-invalid"); }
+});
 $("add-location").addEventListener("click", () => { $("locations-picker").open = false; showError(null, "location-error"); $("location-dialog").showModal(); });
 $("cancel-location").addEventListener("click", () => $("location-dialog").close());
 $("location-form").addEventListener("submit", async event => {

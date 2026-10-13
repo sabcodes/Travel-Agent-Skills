@@ -18,7 +18,7 @@ class OriginFlexibilityTests(unittest.TestCase):
             [("ORD", "LHR"), ("MDW", "LHR")],
         )
 
-    @patch("flight_scanner.get_flights", side_effect=RuntimeError("DNS unavailable"))
+    @patch("flight_scanner._get_flights_resilient", side_effect=RuntimeError("DNS unavailable"))
     def test_surfaces_provider_failures_instead_of_returning_no_deals(self, get_flights):
         with self.assertRaisesRegex(FlightLookupError, "DNS unavailable"):
             scan_route("SFO", "CUN", "2026-11-13", "2026-11-20")
@@ -51,7 +51,7 @@ class OriginFlexibilityTests(unittest.TestCase):
         )
 
     @patch("flight_scanner.time.sleep")
-    @patch("flight_scanner.get_flights", side_effect=[RuntimeError("temporary failure"), []])
+    @patch("flight_scanner._get_flights_resilient", side_effect=[RuntimeError("temporary failure"), []])
     def test_retries_a_transient_provider_failure(self, get_flights, sleep):
         self.assertEqual(scan_route("SFO", "CUN", "2026-11-13", "2026-11-20"), [])
         self.assertEqual(get_flights.call_count, 2)

@@ -40,6 +40,9 @@ class FlightToolTests(unittest.TestCase):
         _, plan = self.cli(self.search_args("--dry-run", "--mode", "deep"))
         self.assertEqual(plan["summary"]["planned_searches"], 52)
         self.assertEqual(plan["query"]["date_pairs"][-1], ["2027-01-26", "2027-01-31"])
+        _, sampled = self.cli(self.search_args("--dry-run", "--mode", "deep", "--date-step-days", "3"))
+        self.assertEqual(sampled["summary"]["planned_searches"], 18)
+        self.assertEqual(sampled["query"]["date_pairs"][1], ["2027-01-04", "2027-01-09"])
         pairs = generate_date_pairs_between("2027-01-01", "2027-01-10", [5, 6], 1)
         self.assertEqual(len(pairs), 11)
         self.assertEqual(pairs[-1], ("2027-01-06", "2027-01-10"))
@@ -58,6 +61,13 @@ class FlightToolTests(unittest.TestCase):
 
     def test_missing_duration_is_not_ranked_as_zero(self):
         self.assertEqual(_duration_minutes("N/A"), float("inf"))
+
+    def test_airlines_match_exact_carriers_case_insensitively_and_check_mixed_itineraries(self):
+        base = {"origin": "SFO", "destination": "DAC", "departure_date": "2027-01-01", "return_date": "2027-01-05", "price": 1500, "stops": 1}
+        fares = [{**base, "airline": "United"}, {**base, "airline": "United, Lufthansa"}, {**base, "airline": "United Express"}, {**base, "airline": "Emirates"}]
+        self.assertEqual([f["airline"] for f in filter_fares(fares, airlines=[" united "])], ["United"])
+        self.assertEqual({f["airline"] for f in filter_fares(fares, airlines=["UNITED", "lufthansa"])}, {"United", "United, Lufthansa"})
+        self.assertEqual(filter_fares(fares, airlines=["Qatar"]), [])
 
     def test_invalid_destination_files_give_clear_errors(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -125,6 +135,50 @@ class FlightToolTests(unittest.TestCase):
         with self.assertRaisesRegex(FlightLookupError, "no outbound"):
             scan_route("SFO", "CUN", "2027-01-01", "2027-01-06")
 
+    @patch("flight_scanner._get_flights_resilient")
+    def test_unpriced_airlines_are_reported_without_inventing_a_fare(self, provider):
+        class Results(list):
+            unpriced_airlines = ["Singapore Airlines"]
+        provider.return_value = Results()
+        warnings = []
+        self.assertEqual(scan_route("SFO", "DAC", "2027-01-01", "2027-01-30", source_warnings=warnings), [])
+        self.assertEqual(warnings[0]["airlines"], ["Singapore Airlines"])
+        self.assertEqual(warnings[0]["status"], "price_unavailable")
+        self.assertEqual(warnings[0]["return_date"], "2027-01-30")
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot = str(Path(folder) / "unpriced.json")
+            code, payload = self.cli(["search", "--dest", "DAC", "--start-date", "2027-01-01", "--end-date", "2027-01-30", "--trip-lengths", "30", "--output", snapshot])
+            self.assertEqual(code, 0)
+            self.assertEqual(payload["source_warnings"], warnings)
+            self.assertIsNone(payload["cheapest"])
+            self.assertEqual(payload["source_errors"], [])
+            _, filtered = self.cli(["filter", "--input", snapshot, "--airlines", "Singapore Airlines"])
+            self.assertEqual(filtered["source_warnings"], warnings)
+            self.assertEqual(filtered["flight_deals"], [])
+
+    @patch("flight_browser.fill_missing_prices")
+    @patch("flight_scanner._get_flights_resilient")
+    def test_browser_retry_is_optional_and_recovered_quotes_use_normal_filters(self, provider, browser):
+        dep, arr = NS(date=(2027, 1, 1), time=(8, 0)), NS(date=(2027, 1, 1), time=(13, 0))
+        item = NS(price=None, airlines=["Singapore Airlines"], flights=[NS(from_airport=NS(code="SFO"), to_airport=NS(code="DAC"), departure=dep, arrival=arr, duration=300, plane_type="A350")])
+        provider.return_value = [item]
+        self.assertEqual(scan_route("SFO", "DAC", "2027-01-01", "2027-01-06"), [])
+        browser.assert_not_called()
+        self.assertEqual(scan_route("SFO", "DAC", "2027-01-01", "2027-01-06", browser_missing=True, browser_airlines=["Emirates"]), [])
+        browser.assert_not_called()
+        def recover(*args, **kwargs):
+            item.price, item.price_source, item.price_checked_at = 995, "google_flights_browser", "2026-10-13T12:00:00+00:00"
+            return {"status": "recovered", "recovered": 1}
+        browser.side_effect = recover
+        attempts, warnings, phases = [], [], []
+        fares = scan_route("SFO", "DAC", "2027-01-01", "2027-01-06", browser_missing=True, browser_engine="chrome", browser_airlines=["singapore airlines"], browser_attempts=attempts, source_warnings=warnings, browser_callback=lambda: phases.append("browser"))
+        self.assertEqual(fares[0]["price"], 995)
+        self.assertEqual(fares[0]["price_source"], "google_flights_browser")
+        self.assertEqual(attempts[0]["recovered"], 1)
+        self.assertEqual(warnings, [])
+        self.assertEqual(phases, ["browser"])
+        self.assertEqual(filter_fares(fares, max_price=900), [])
+
     @patch("flight_scanner.scan_route")
     def test_saved_filter_is_repeatable_offline_and_can_relax_local_limits(self, route):
         def fares(**query):
@@ -145,7 +199,7 @@ class FlightToolTests(unittest.TestCase):
             route.assert_not_called()
 
     def test_invalid_cli_inputs_report_usage_errors(self):
-        for extra in [("--date-step-days", "0"), ("--max-price", "nan"), ("--trip-lengths", "1"), ("--mode", "deep", "--date-step-days", "5")]:
+        for extra in [("--date-step-days", "0"), ("--max-price", "nan"), ("--trip-lengths", "1"), ("--airlines", ", ")]:
             with self.subTest(extra=extra), redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as error:
                     main(self.search_args("--dry-run", *extra))

@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple, Callable
 
 try:
-    from fast_flights import FlightQuery, create_filter, fetch_flights_html, get_flights
+    from fast_flights import FlightQuery, ResultList, create_filter, fetch_flights_html
     from fast_flights.parser import parse_js
     from selectolax.lexbor import LexborHTMLParser
     # Alias FlightData to FlightQuery for spec compatibility
@@ -18,7 +18,7 @@ except ImportError:
     FlightQuery = None
     create_filter = None
     fetch_flights_html = None
-    get_flights = None
+    ResultList = None
     parse_js = None
     LexborHTMLParser = None
     FlightData = None
@@ -100,45 +100,38 @@ def _fare_sort_key(deal: Dict[str, Any]) -> Tuple[Any, ...]:
     )
 
 
-def _drop_unpriced_flight_groups(payload: List[Any]) -> int:
-    """Remove Google result groups that do not contain a numeric fare."""
-    groups = payload[3][0]
-    if not isinstance(groups, list):
-        return 0
-
-    priced_groups = []
+def _get_flights_resilient(query):
+    """Read both Google fare sections and retain notices for unpriced airlines."""
+    html = fetch_flights_html(query)
+    script = LexborHTMLParser(html).css_first(r"script.ds\:1")
+    if script is None:
+        raise ValueError("Google Flights response has no flight data")
+    data = script.text().split("data:", 1)[1].rsplit(",", 1)[0]
+    payload = json.loads(data)
+    groups = []
+    seen = set()
+    # fast-flights 3.1 parses only slot 3; slot 2 holds Google's best flights.
+    for section in (payload[2], payload[3]):
+        for group in (section[0] or []) if section is not None else []:
+            key = json.dumps(group, sort_keys=True)
+            if key not in seen:
+                groups.append(group)
+                seen.add(key)
+    payload[3] = [groups]
+    unpriced_airlines = set()
     for group in groups:
         try:
             price = group[1][0][1]
         except (IndexError, TypeError):
-            continue
-        if isinstance(price, (int, float)):
-            priced_groups.append(group)
-
-    removed = len(groups) - len(priced_groups)
-    payload[3][0] = priced_groups
-    return removed
-
-
-def _get_flights_resilient(query):
-    """Fetch with fast-flights while tolerating Google's unpriced result rows."""
-    try:
-        return get_flights(query)
-    except (IndexError, TypeError) as original_error:
-        html = fetch_flights_html(query)
-        script = LexborHTMLParser(html).css_first(r"script.ds\:1")
-        if script is None:
-            raise original_error
-
-        js = script.text()
-        data = js.split("data:", 1)[1].rsplit(",", 1)[0]
-        payload = json.loads(data)
-        if isinstance(payload, list) and len(payload) > 3 and payload[3] is None:
-            return []
-        if _drop_unpriced_flight_groups(payload) == 0:
-            raise original_error
-
-        return parse_js(f"data:{json.dumps(payload, separators=(',', ':'))},")
+            price = None
+        if not isinstance(price, (int, float)):
+            unpriced_airlines.update(group[0][1] or [])
+            # The upstream model accepts None at runtime. Preserve the actual
+            # outbound itinerary for a browser retry without fabricating a fare.
+            group[1] = [[None, None]]
+    results = parse_js(f"data:{json.dumps(payload, separators=(',', ':'))},") if payload[3][0] else ResultList()
+    results.unpriced_airlines = sorted(unpriced_airlines)
+    return results
 
 
 def generate_target_date_pairs(
@@ -215,14 +208,20 @@ def scan_route(
     dep_date: str,
     ret_date: Optional[str] = None,
     max_price: Optional[float] = None,
-    max_stops: Optional[int] = None
+    max_stops: Optional[int] = None,
+    source_warnings: Optional[List[Dict[str, Any]]] = None,
+    browser_missing: bool = False,
+    browser_engine: str = "chromium",
+    browser_attempts: Optional[List[Dict[str, Any]]] = None,
+    browser_callback: Optional[Callable[[], None]] = None,
+    browser_airlines: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Scrapes Google Flights for a specific route and dates using fast-flights.
     Returns flight deals at or below max_price.
     """
     deals = []
-    if not get_flights or not fetch_flights_html or not create_filter:
+    if not fetch_flights_html or not create_filter:
         raise FlightLookupError("fast-flights is not installed or could not be imported")
 
     try:
@@ -262,6 +261,27 @@ def scan_route(
                 f"({dep_date} to {ret_date}) after {FLIGHT_LOOKUP_ATTEMPTS} attempts: {last_error}"
             ) from last_error
 
+        browser_report = None
+        selected_browser_airlines = {name.casefold() for name in browser_airlines} if browser_airlines else None
+        if browser_missing and any(getattr(item, "price", None) is None and (selected_browser_airlines is None or {name.casefold() for name in item.airlines}.issubset(selected_browser_airlines)) for item in results):
+            from flight_browser import fill_missing_prices
+            if browser_callback:
+                browser_callback()
+            browser_report = fill_missing_prices(q, results, engine=browser_engine, airlines=browser_airlines)
+            if browser_attempts is not None:
+                browser_attempts.append({"origin": origin, "destination": destination,
+                                        "departure_date": dep_date, "return_date": ret_date, **browser_report})
+        unpriced_airlines = sorted({name for item in results if getattr(item, "price", None) is None for name in item.airlines})
+        # Preserve compatibility with callers that supply metadata-only results.
+        if not results:
+            unpriced_airlines = getattr(results, "unpriced_airlines", [])
+        if source_warnings is not None and unpriced_airlines:
+            source_warnings.append({
+                "origin": origin, "destination": destination,
+                "departure_date": dep_date, "return_date": ret_date,
+                "status": "price_unavailable", "airlines": unpriced_airlines,
+                "message": "Google returned itineraries without numeric prices; excluded from fare comparisons.",
+            })
         if not results:
             return deals
 
@@ -351,6 +371,9 @@ def scan_route(
                     "legs": leg_details,
                     "booking_url": q.url()
                 })
+                if getattr(item, "price_source", None):
+                    deals[-1]["price_source"] = item.price_source
+                    deals[-1]["price_checked_at"] = item.price_checked_at
 
     except FlightLookupError:
         raise
@@ -372,6 +395,11 @@ def scan_flights(
     source_errors: Optional[List[Dict[str, Any]]] = None,
     search_records: Optional[List[Dict[str, Any]]] = None,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    source_warnings: Optional[List[Dict[str, Any]]] = None,
+    browser_missing: bool = False,
+    browser_engine: str = "chromium",
+    browser_attempts: Optional[List[Dict[str, Any]]] = None,
+    browser_airlines: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Main entrypoint to sweep Google Flights for deals across origins and destinations.
@@ -423,7 +451,13 @@ def scan_flights(
                         dep_date=dep_date,
                         ret_date=ret_date,
                         max_price=max_price,
-                        max_stops=max_stops
+                        max_stops=max_stops,
+                        source_warnings=source_warnings,
+                        browser_missing=browser_missing,
+                        browser_engine=browser_engine,
+                        browser_attempts=browser_attempts,
+                        browser_airlines=browser_airlines,
+                        browser_callback=(lambda: progress_callback({**record, "event": "phase", "phase": "browser", "completed": completed, "total": total})) if progress_callback else None,
                     )
                     successful_lookups += 1
                 except FlightLookupError as error:
