@@ -4,6 +4,8 @@ A free, login-free research tool and Codex skill for comparing cash flights, pub
 
 The flight-only CLI defaults to **SFO**, with 50 selectable destinations. The combined tracker defaults to SFO/SJC. Both accept custom IATA airports.
 
+Use the lightweight local browser app to choose destinations, compare flexible dates, filter saved fares, and export a CSV. The same search and filtering commands work directly in the CLI, without an agent or a frontend build.
+
 ## Setup and Requirements
 
 Install these first:
@@ -43,6 +45,27 @@ Verify setup with a network-free search preview:
 ```
 
 Continue with the browser app or flight CLI below, or see [Load the Skill in Codex](#load-the-skill-in-codex) for agent setup. Install `requirements.txt` instead when using the combined tracker.
+
+## App preview
+
+Choose locations, vacation length, and dates, then preview the exact search plan. This example samples six-day trips every five days.
+
+![Local flight search with destination selection, vacation length, dates, regular/deep modes, and search preview](docs/screenshots/flight-search.png)
+
+Compare the lowest qualifying fares across dates, filter by price, airline, layovers, and travel time, then export CSV or JSON. The image uses previously captured public quotes; it is an example, not current availability.
+
+![Saved fare comparison for Cancun and Maui with lowest prices, offline filters, and CSV/JSON export](docs/screenshots/flight-results.png)
+
+<details>
+<summary>See advanced options</summary>
+
+Control departure spacing, origin airports, airlines, layovers, and optional price/time limits. The slower headless retry is experimental and has not yet recovered the Singapore prices shown during testing.
+
+![Advanced flight search settings, including airline and layover filters and the experimental headless retry](docs/screenshots/advanced-options.png)
+
+</details>
+
+See [screenshot notes](docs/screenshots/README.md) for capture details and reuse.
 
 ## Local browser app
 
