@@ -8,7 +8,7 @@ No login, personal browser profile, or agent-driven clicking is required: the ex
 
 The prototype runs in visible installed Chrome on an Apple Silicon Mac, with Python and Node.js 24+. App integration, Intel testing, and native headless mode remain next steps.
 
-[Code, demo and instructions](https://github.com/sabcodes/Travel-Agent-Skills#recover-missing-singapore-prices-experimental).
+[Code, demo and instructions](https://github.com/sabcodes/Travel-Agent-Skills/releases/tag/native-chrome-prototype-2026-10-14).
 
 ![Verified automated Singapore pricing](screenshots/singapore-native-chrome.png)
 
