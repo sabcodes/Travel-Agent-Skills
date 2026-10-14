@@ -25,6 +25,8 @@ The optional **slower browser retry** needs [requirements-browser.txt](requireme
 
 Alternatively, select installed Google Chrome and omit the Chromium download. Both choices launch a separate **headless** browser with a fresh context; they do not connect to your open browser, use its profile, or require computer-control access. Current [Playwright system requirements](https://playwright.dev/python/docs/intro#system-requirements) list macOS 14+. Older Macs can continue using the default fast search without this option.
 
+An isolated **visible native Chrome diagnostic** recovered Singapore prices that the headless path missed, including a five-day January 2027 trip. It is not integrated into the app. See [the experiment and commands](docs/native-chrome-price-investigation.md) for its optional Node.js/Chrome setup, verification, and limits. Normal app setup remains as above.
+
 On macOS/Linux:
 
 ```bash

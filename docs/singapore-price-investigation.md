@@ -1,6 +1,6 @@
 # Singapore Airlines missing-price investigation
 
-Checked October 13, 2026. Live recovery remains unresolved. Recorded Singapore quotes can be decoded; the fresh headless Google session still receives unpriced Singapore results.
+October 14 update: an isolated, visible native Chrome/CDP prototype recovered live Singapore quotes, including a five-day January trip. See [the experiment, controlled comparisons, and reproducible commands](native-chrome-price-investigation.md). The default headless retry remains unchanged. The evidence below records the earlier October 13 investigation.
 
 ## What the captures establish
 
