@@ -174,6 +174,22 @@ Append a record to `flight_destinations.json`, or copy it and pass `--pool PATH`
 
 Use a unique id and uppercase three-letter airport codes. Optional `aliases` accept alternate names; optional `gateway_note` describes onward travel excluded from the fare. Multiple `airports` are searched independently and the matrix selects the cheapest qualifying airport. Validate the pool with `.venv/bin/python flight_tools.py destinations --pool PATH`. The flight pool is separate from the existing award/stay configuration.
 
+### Compare flight backends
+
+The app currently uses [`fast-flights`](https://github.com/AWeirdDev/flights) through our adapter. The optional [`fli` evaluation](docs/fli-backend-evaluation.md) compares it with a pinned `punitarani/fli` source version. Install that version in a **separate environment** with Python 3.10+, pip, Git, and an internet connection:
+
+```bash
+.venv/bin/python -m venv /tmp/travel-fli-eval
+/tmp/travel-fli-eval/bin/python -m pip install -r requirements-fli-eval.txt
+.venv/bin/python evaluate_flight_backends.py compare \
+  --fli-python /tmp/travel-fli-eval/bin/python \
+  --repeats 3 --output /tmp/flight-backend-evaluation.json
+```
+
+This runs four fixed SFO date pairs across Cancun and Dhaka, then expands return options for Cancun and Singapore Airlines on the two Dhaka screenshot date pairs. It saves each completed attempt, fare counts, missing-carrier notices, separate starting/selected-pair quotes, and median lookup times. The default performs 27 search operations; return expansion can fetch several pages per operation. `--top-n` defaults to 3; `--timeout` bounds each worker at 60 seconds. Exit code 1 means at least one provider/worker failure or timeout; unknown prices remain unknown. The `probe` subcommand accepts an explicit route and dates for individual checks once the fixed dates have passed.
+
+The October 13, 2026 evaluation found no cheaper starting quotes and no recovered Singapore prices. `fli` provided return-itinerary detail, but its CLI used the outbound starting price for more expensive return combinations. Our evaluation keeps those price fields separate. See the report for evidence, limits, and the adoption decision; this command does not switch the app's provider or require Playwright.
+
 ## What It Searches
 
 | Data lane | What the tool returns | Important limitation |

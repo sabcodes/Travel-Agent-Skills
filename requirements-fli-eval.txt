@@ -1,0 +1,3 @@
+# Optional evaluation only; this does not change the app's default provider.
+# Install in a separate environment. Git is required for the pinned public source.
+flights @ git+https://github.com/punitarani/fli.git@881aee5ff4321e81ea2157cb44be94ce6a21dc1b

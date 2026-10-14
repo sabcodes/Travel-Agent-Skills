@@ -75,6 +75,8 @@ Gateway notes describe onward travel excluded from airfare. Display actual arriv
 
 If the provider fails, inspect errors and diagnose the local path. Use browser UI only when requested or the checked-in path remains unavailable after reasonable diagnosis; disclose the fallback.
 
+For an explicitly requested backend comparison, use `evaluate_flight_backends.py compare` with an isolated `fli` Python environment, following [setup and evaluation evidence](../../../docs/fli-backend-evaluation.md). The default app remains on `fast-flights`. Distinguish an outbound starting quote from the price for a selected outbound/return pair; the evaluated `fli` CLI does not make that distinction correctly. Missing Singapore prices remained missing in the bounded live checks. Do not treat successful return expansion, extra metadata, or three timing samples as proof of broader fare coverage or bookable inventory.
+
 ## Add destinations
 
 Append a record to `flight_destinations.json`, or pass an alternate file with `--pool PATH`:
