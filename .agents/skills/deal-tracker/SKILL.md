@@ -21,6 +21,8 @@ Advanced Missing prices enables the same opt-in `--browser-missing` fallback as 
 
 Read `browser_attempts` (status, recovered count, stage, elapsed time) and remaining `source_warnings`. Recovered quotes carry `price_source=google_flights_browser` and `price_checked_at`. A failed later browser step can coexist with retained valid earlier quotes. Do not infer prices or claim exhaustive coverage; live headless checks have not yet reproduced the priced Singapore examples shown in screenshots. Do not switch to desktop/profile access or challenge bypasses to compensate.
 
+For Singapore missing-price diagnostics, see the [capture and live comparison](../../../docs/singapore-price-investigation.md). The current decoder reads the supplied priced Cheapest responses, while fresh headless responses remain unpriced. Keep captured amounts separate from live rankings; a successful historical decode does not establish live recovery.
+
 ## Cash-flight workflow
 
 1. Translate requested airports, total travel window, trip lengths, search depth, and optional limits into a command. Named destinations restrict the search to those selections. Discover pool ids, names, airport alternatives, and gateway notes with `flight_tools.py destinations`.

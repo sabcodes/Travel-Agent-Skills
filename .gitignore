@@ -11,3 +11,4 @@ credentials.json
 *.pem
 *.key
 secrets/
+*.har

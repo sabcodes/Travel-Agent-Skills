@@ -73,6 +73,35 @@ class BrowserQuoteTests(unittest.TestCase):
             self.assertEqual(shopping_response_flights(text, query, {"Singapore Airlines"}), ["additional priced itinerary"])
         self.assertEqual(len(json.loads(parser.call_args.args[0][5:-1])[3][0]), 1)
 
+    def test_cheapest_capture_shape_decodes_quotes_with_real_provider_parser(self):
+        # Reconstruct only public schedule/quote fields from the observed
+        # two-leg response shape. No HAR headers or opaque contexts belong here.
+        query = create_filter(flights=[FlightQuery(date="2027-01-12", from_airport="SFO", to_airport="DAC"),
+                                      FlightQuery(date="2027-02-13", from_airport="DAC", to_airport="SFO")], trip="round-trip", currency="USD")
+        def leg(origin, destination, departure, arrival, duration):
+            value = [None] * 23
+            value[3], value[4], value[6], value[5] = origin, origin, destination, destination
+            value[8], value[10], value[11] = departure[1], arrival[1], duration
+            value[20], value[21] = departure[0], arrival[0]
+            return value
+        legs = [leg("SFO", "SIN", ([2027, 1, 12], [9, 40]), ([2027, 1, 13], [18, 20]), 1045),
+                leg("SIN", "DAC", ([2027, 1, 13], [19, 55]), ([2027, 1, 13], [22, 40]), 240)]
+        flight = [None] * 23
+        flight[0], flight[1], flight[2] = "single", ["Singapore Airlines"], legs
+        flight[22] = [None] * 9
+        flight[22][7], flight[22][8] = 1319000, 1100000
+        def frame(price):
+            group = [flight, [[None, price]] if price is not None else [[]]]
+            payload = [None, None, None, [[group]], None, None, None, [None, [[], [["SQ", "Singapore Airlines"]]]]]
+            data = json.dumps([["wrb.fr", None, json.dumps(payload)]])
+            return f"{len(data)}\n{data}\n"
+        flights = shopping_response_flights(
+            ")]}'\n\n" + frame(None) + frame(1039) + frame(1039), query, {"Singapore Airlines"})
+        self.assertEqual(len(flights), 1)
+        self.assertEqual(flights[0].price, 1039)
+        self.assertEqual(flights[0].airlines, ["Singapore Airlines"])
+        self.assertEqual([leg.from_airport.code for leg in flights[0].flights], ["SFO", "SIN"])
+
 
 if __name__ == "__main__":
     unittest.main()
