@@ -6,6 +6,8 @@ The flight-only CLI defaults to **SFO**, with 50 selectable destinations. The co
 
 Use the lightweight local browser app to choose destinations, compare flexible dates, filter saved fares, and export a CSV. The same search and filtering commands work directly in the CLI, without an agent or a frontend build.
 
+**New experiment: recover missing Singapore Airlines prices with automated native Chrome.** Numeric Google responses and final flight rows agree across fresh sessions. [See the demo and reproduce it](#recover-missing-singapore-prices-experimental).
+
 ## Setup and Requirements
 
 Install these first:
@@ -24,6 +26,8 @@ The optional **slower browser retry** needs [requirements-browser.txt](requireme
 ```
 
 Alternatively, select installed Google Chrome and omit the Chromium download. Both choices launch a separate **headless** browser with a fresh context; they do not connect to your open browser, use its profile, or require computer-control access. Current [Playwright system requirements](https://playwright.dev/python/docs/intro#system-requirements) list macOS 14+. Older Macs can continue using the default fast search without this option.
+
+An isolated **visible native Chrome diagnostic** recovered Singapore prices that the headless path missed, including a five-day January 2027 trip. It is not integrated into the app. See [the experiment and commands](docs/native-chrome-price-investigation.md) for its optional Node.js/Chrome setup, verification, and limits. Normal app setup remains as above.
 
 On macOS/Linux:
 
@@ -45,6 +49,23 @@ Verify setup with a network-free search preview:
 ```
 
 Continue with the browser app or flight CLI below, or see [Load the Skill in Codex](#load-the-skill-in-codex) for agent setup. Install `requirements.txt` instead when using the combined tracker.
+
+## Recover missing Singapore prices (experimental)
+
+Seeing the flights without their prices is a frustrating gap in flight-search tooling. Our deterministic **visible Chrome/CDP prototype** recovered five priced Singapore-only outbound options, with Singapore selected for both directions. It runs from CLI commands, without an agent choosing browser actions, a login, or a personal Chrome profile.
+
+| SFO-Dhaka dates in 2027 | Lowest observed round-trip starting quote |
+|---|---:|
+| January 12-February 13 | $1,067 |
+| January 12-16 (five inclusive days) | $1,573 |
+
+Observed October 14, 2026, for one adult, economy, USD. These are search starting quotes, not held tickets or final prices for a selected return. The longer window passed in three fresh profiles; the five-day window passed once. The verifier requires matching numeric network data and individual prices on the final Cheapest page, with the requested dates and SQ restrictions on both legs.
+
+![Automated signed-out Google Chrome displaying five individual Singapore Airlines fares, with Singapore and Cheapest selected](docs/screenshots/singapore-native-chrome.png)
+
+Our tested regular provider, `fli`, and ordinary Playwright paths did not recover Singapore prices in their bounded checks. This prototype demonstrates another working path; it is not a claim about every route or competing tool. See the [backend comparison](docs/fli-backend-evaluation.md) and [controlled Chrome investigation](docs/native-chrome-price-investigation.md).
+
+**Try it:** follow the [reproducible commands](docs/native-chrome-price-investigation.md#reproduce), using Python flight/browser dependencies, Node.js 24+, and installed Chrome. This diagnostic was verified on Apple Silicon macOS. Intel hardware and native headless mode are pending checks. The prototype is separate from the app's current retry; app integration is tracked in [issue #1](https://github.com/sabcodes/Travel-Agent-Skills/issues/1).
 
 ## App preview
 

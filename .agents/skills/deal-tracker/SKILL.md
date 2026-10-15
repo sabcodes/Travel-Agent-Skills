@@ -21,7 +21,7 @@ Advanced Missing prices enables the same opt-in `--browser-missing` fallback as 
 
 Read `browser_attempts` (status, recovered count, stage, elapsed time) and remaining `source_warnings`. Recovered quotes carry `price_source=google_flights_browser` and `price_checked_at`. A failed later browser step can coexist with retained valid earlier quotes. Do not infer prices or claim exhaustive coverage; live headless checks have not yet reproduced the priced Singapore examples shown in screenshots. Do not switch to desktop/profile access or challenge bypasses to compensate.
 
-For Singapore missing-price diagnostics, see the [capture and live comparison](../../../docs/singapore-price-investigation.md). The current decoder reads the supplied priced Cheapest responses, while fresh headless responses remain unpriced. Keep captured amounts separate from live rankings; a successful historical decode does not establish live recovery.
+For Singapore missing-price diagnostics or an explicitly requested alternative browser evaluation, read the [native Chrome experiment and reproducible commands](../../../docs/native-chrome-price-investigation.md). The isolated visible Chrome/CDP prototype recovered quotes; it is separate from the app's headless retry. Use its final-state verifier to require matching live-capture network/row amounts, exact dates, and SQ filters on both legs. Keep historical HAR prices separate from current rankings and preserve the production integration boundary described there. The [earlier HAR investigation](../../../docs/singapore-price-investigation.md) records the original unpriced headless result.
 
 ## Cash-flight workflow
 
