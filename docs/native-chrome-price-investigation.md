@@ -1,6 +1,6 @@
 # Singapore pricing: native Chrome experiment
 
-Checked October 14, 2026, on an Apple Silicon Mac. This is an isolated diagnostic prototype, not the app's browser retry implementation.
+Checked October 14, 2026, on an Apple Silicon Mac. This report records the original isolated diagnostic prototype. The October 15 app update integrates the same search order through the Python native Chrome adapter; see [UI integration](local-flight-ui.md#native-chrome-recovery).
 
 ## Result
 
@@ -65,7 +65,7 @@ One DOM-driven run reached filtered Cheapest with Singapore rows but no numeric 
 
 The offline tests cover matching network/DOM quotes, currency, cabins, itinerary identity, duplicate frames, redacted output, both-leg airline filters, exact dates, provider failures, and withdrawn transient prices. Live captures independently establish the pricing result; unit tests do not establish live availability.
 
-The prototype has not been merged into the application. A production adapter still needs configurable routes/dates, bounded waits and cancellation, missing-carrier targeting, progress/ETA, and the existing fare merge/ranking contract. It should preserve live search constraints and label starting quotes consistently with the normal provider. The separate retrieval button must merge verified fares and recompute filtered minima.
+The app now integrates this flow in `flight_native_browser.py`, with configurable saved routes/dates, bounded waits, cancellation, missing-carrier targeting, progress/ETA, and shared fare merge/ranking. The separate retrieval button updates filtered minima and exports after each completed lookup. The Node probe remains separate for HAR investigations; raw diagnostic captures do not enter app rankings.
 
 ## References
 

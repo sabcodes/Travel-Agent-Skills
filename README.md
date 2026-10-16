@@ -6,7 +6,7 @@ The flight-only CLI defaults to **SFO**, with 50 selectable destinations. The co
 
 Use the lightweight local browser app to choose destinations, compare flexible dates, filter saved fares, and export a CSV. The same search and filtering commands work directly in the CLI, without an agent or a frontend build.
 
-**New experiment: recover missing Singapore Airlines prices with automated native Chrome.** Numeric Google responses and final flight rows agree across fresh sessions. [See the demo and reproduce it](#recover-missing-singapore-prices-experimental).
+**Recover missing Singapore Airlines prices from the app.** A separate **Retrieve missing prices (slower)** button opens disposable native Chrome, verifies individual Cheapest quotes, and updates the table, filters and lowest fares. [See the demo](#recover-missing-singapore-prices-experimental).
 
 ## Setup and Requirements
 
@@ -18,16 +18,16 @@ Install these first:
 
 For the **flight CLI and browser app only**, use [requirements-flights.txt](requirements-flights.txt); it installs `fast-flights` and its dependencies. For award feeds, hotels, and BnBs as well, use [requirements.txt](requirements.txt). Playwright is a dependency of the combined tracker, but flight searches do not require it or browser-binary downloads. The CLI and app run without travel-account credentials or an OpenAI API key; Codex is optional for using the agent skill.
 
-The optional **slower browser retry** needs [requirements-browser.txt](requirements-browser.txt):
+For the optional **native Chrome missing-price retry**, install [Google Chrome](https://www.google.com/chrome/) for your Mac and keep `requirements-flights.txt` up to date. It opens a separate **visible** Chrome window with a new temporary profile, drives the search, then closes its window and removes its profile. It does not attach to your open browser or require a login. Chrome's own OS requirements apply; use the default fast search if Chrome cannot run on your Mac. No Node installation or Playwright download is needed for this backend.
+
+The older **headless Playwright** engines remain optional alternatives. Install [requirements-browser.txt](requirements-browser.txt), then either select installed headless Chrome or download Chromium:
 
 ```bash
 .venv/bin/python -m pip install -r requirements-browser.txt
 .venv/bin/python -m playwright install chromium
 ```
 
-Alternatively, select installed Google Chrome and omit the Chromium download. Both choices launch a separate **headless** browser with a fresh context; they do not connect to your open browser, use its profile, or require computer-control access. Current [Playwright system requirements](https://playwright.dev/python/docs/intro#system-requirements) list macOS 14+. Older Macs can continue using the default fast search without this option.
-
-An isolated **visible native Chrome diagnostic** recovered Singapore prices that the headless path missed, including a five-day January 2027 trip. It is not integrated into the app. See [the experiment and commands](docs/native-chrome-price-investigation.md) for its optional Node.js/Chrome setup, verification, and limits. Normal app setup remains as above.
+Current [Playwright system requirements](https://playwright.dev/python/docs/intro#system-requirements) list macOS 14+. These engines did not recover the tested Singapore fares; native Chrome is the recommended missing-price engine. The [original investigation](docs/native-chrome-price-investigation.md) includes the separate Node diagnostic, which remains available for research.
 
 On macOS/Linux:
 
@@ -52,7 +52,7 @@ Continue with the browser app or flight CLI below, or see [Load the Skill in Cod
 
 ## Recover missing Singapore prices (experimental)
 
-Seeing the flights without their prices is a frustrating gap in flight-search tooling. Our deterministic **visible Chrome/CDP prototype** recovered five priced Singapore-only outbound options, with Singapore selected for both directions. It runs from CLI commands, without an agent choosing browser actions, a login, or a personal Chrome profile.
+Seeing the flights without their prices is a frustrating gap in flight-search tooling. Our deterministic **visible Chrome/CDP backend** recovered five priced Singapore-only outbound options, with Singapore selected for both directions. It runs from CLI commands, without an agent choosing browser actions, a login, or a personal Chrome profile.
 
 | SFO-Dhaka dates in 2027 | Lowest observed round-trip starting quote |
 |---|---:|
@@ -65,7 +65,23 @@ Observed October 14, 2026, for one adult, economy, USD. These are search startin
 
 Our tested regular provider, `fli`, and ordinary Playwright paths did not recover Singapore prices in their bounded checks. This prototype demonstrates another working path; it is not a claim about every route or competing tool. See the [backend comparison](docs/fli-backend-evaluation.md) and [controlled Chrome investigation](docs/native-chrome-price-investigation.md).
 
-**Try it:** follow the [reproducible commands](docs/native-chrome-price-investigation.md#reproduce), using Python flight/browser dependencies, Node.js 24+, and installed Chrome. This diagnostic was verified on Apple Silicon macOS. Intel hardware and native headless mode are pending checks. The prototype is separate from the app's current retry; app integration is tracked in [issue #1](https://github.com/sabcodes/Travel-Agent-Skills/issues/1).
+**Try it in the app:** complete a regular search, optionally apply an airline filter, expand **Itineraries without prices**, then click **Retrieve missing prices (slower)**. Native Chrome is selected by default in Advanced options. Progress shows each stage and an approximate ETA. Each completed lookup merges verified fares, recomputes the matrix and cheapest-price banner, and preserves your filters. Refresh reconnects to the same retry; stopping retains earlier completed lookups.
+
+The equivalent deterministic CLI works on an exported search snapshot:
+
+```bash
+.venv/bin/python flight_tools.py retry-missing --input /tmp/january-lite.json \
+  --browser-engine native-chrome --progress-json \
+  --output /tmp/january-recovered.json --format table
+```
+
+It retries only missing-price cells from the saved query, using its original dates and live layover limit plus its applied airline filter. It does not repeat the regular provider search. Existing quotes are retained. Each accepted native fare has `price_source=google_flights_native_chrome` and its own `price_checked_at`; CSV/JSON exports include the updated minima and quote provenance. Clearing local filters can restore other retained fares.
+
+![App after native Chrome recovery: Singapore-filtered five-day Dhaka fares, updated lowest quote and matrix](docs/screenshots/singapore-app-recovery.png)
+
+Captured during the October 15, 2026 live UI test; these are observed quotes, not current availability.
+
+Verified on Apple Silicon macOS; Intel hardware remains untested. The Python implementation uses installed Chrome and architecture-independent code. Google can still return unavailable prices, errors or changed UI; missing values remain unpriced and cannot enter minima. See [implementation and verification](docs/local-flight-ui.md#native-chrome-recovery).
 
 ## App preview
 
@@ -80,7 +96,7 @@ Compare the lowest qualifying fares across dates, filter by price, airline, layo
 <details>
 <summary>See advanced options</summary>
 
-Control departure spacing, origin airports, airlines, layovers, and optional price/time limits. The slower headless retry is experimental and has not yet recovered the Singapore prices shown during testing.
+Control departure spacing, origin airports, airlines, layovers, and optional price/time limits. Native Chrome recovery opens a separate visible window; the optional headless Playwright engines remain available for comparison. The older screenshot below predates that engine choice.
 
 ![Advanced flight search settings, including airline and layover filters and the experimental headless retry](docs/screenshots/advanced-options.png)
 
@@ -112,13 +128,26 @@ The app serves only on `127.0.0.1`, runs one live search at a time, and executes
 
 Editing vacation length or other search settings marks the existing table as **previous results**. Click **Find flights** to fetch fares for the edited settings. The summary labels the actual trip length searched, so a saved five-day table cannot be mistaken for a new thirty-day search. A blank regular departure interval follows the vacation length; an explicit interval remains an independent sampling choice.
 
-Under **Advanced options → Missing prices**, choose **Retry in browser (slower)** and a browser engine. It is off by default. The CLI first runs the fast search, then retries only route/date combinations containing eligible unpriced itineraries. It resolves airline names from provider metadata, preserves the live layover limit, and inspects Best, View more flights, and Cheapest using fixed Playwright selectors. It reads complete framed shopping responses, including additional priced itineraries for missing carriers; an exact DOM match can also fill a quote on an existing itinerary. Regular/deep date sampling stays the same, and normal price/airline/duration/wait filters apply to recovered fares.
+Under **Advanced options → Missing prices**, choose **Retry in browser (slower)** to include browser checks during a regular or deep search. This remains off by default. For a separate process after fast search, use the bottom **Retrieve missing prices (slower)** button instead. Both use the selected engine and shared CLI filters/ranking.
 
-Browser loading adds time. UI waits share a 45-second budget per retry; failures and unresolved prices are recorded in `browser_attempts` and `source_warnings`. Progress labels the browser phase, and recovered rows say **browser quote** with `price_source` and `price_checked_at` in JSON. This is a best-effort fallback: Google may return errors, challenges, or unpriced results, and its UI/data format can change. The tool does not bypass challenges or infer missing fares. Recent live headless checks did not reproduce the screenshot's priced Singapore itineraries; use the saved statuses rather than treating browser retries as complete airline coverage.
+Native Chrome checks Best, opens Cheapest, expands additional flights, then applies the missing carriers through fixed DOM controls. It verifies exact outbound/return request dates and carrier restrictions in both directions, one-adult economy settings and the live stop limit. Each price must agree between numeric shopping data and an individual final USD Cheapest row in two stable observations; tab headers and withdrawn transient prices do not qualify. A lookup has a 90-second budget. Errors and remaining unpriced schedules appear in `browser_attempts` and `source_warnings`.
 
-The [Singapore price investigation](docs/singapore-price-investigation.md) found numeric quotes in a supplied Cheapest-view HAR that the existing decoder can read. Fresh headless searches still received empty Singapore prices with matching search filters; selecting both flights reached Google's “Price hidden because it might be incorrect” message. The cause of the differing responses remains under investigation. Captured amounts are historical evidence and are not added to live rankings.
+The retry displays completed lookups, current stage and ETA (an initial estimate, then measured lookup times). Each completed lookup updates the fare table, destination/date minima, best-price banner and exports. Existing fares remain available while retrieving. Cancellation saves earlier completed lookups, closes the owned Chrome window and removes its temporary profile. Raw network captures and personal browser data are not stored by the app. Legacy headless retries use a 45-second budget and can remain unpriced even when native Chrome succeeds.
 
 ### Browser regression test
+
+The isolated live native regression adds Dhaka through the UI, searches a five-day January window, applies Singapore, presses the separate retry button, and checks live recovery, progress/ETA, minima, filters, refresh and CSV/JSON provenance. It requires installed Chrome plus the optional Playwright Python package to drive the **local app UI**:
+
+```bash
+.venv/bin/python ui_native_retry_test.py --live --output /tmp/travel-native-ui-test
+```
+
+For an offline UI/CLI regression with a clearly labelled fixture provider (including partial progress and cancellation):
+
+```bash
+.venv/bin/python ui_missing_retry_test.py --browser chrome --output /tmp/travel-retry-ui-test
+```
+
 
 The optional [ui_browser_test.py](ui_browser_test.py) uses Playwright to add **Dhaka, Bangladesh (DAC)** through the UI and run a five-day regular January 2027 search from SFO, then change it to thirty days and verify the request/table use Jan 1–30. It also checks required fields, visible progress/ETA, a custom deep interval, airline filters, CSV/JSON downloads, and refresh recovery. It persists the added location and runs seven live lookups; it is separate from the offline unit suite. `--duration-change-only` reuses a completed five-day Dhaka search and runs only the one thirty-day lookup.
 

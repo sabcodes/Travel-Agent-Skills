@@ -9,6 +9,10 @@ let renderedJob = null;
 let filterBusy = false;
 let submittedSettings = null;
 let displayedTripDays = null;
+let jobActive = false;
+let retryEligible = 0;
+let renderedProgress = null;
+let displayedJobId = null;
 
 async function api(path, values) {
   const options = values === undefined ? {} : {
@@ -156,16 +160,21 @@ function seconds(value) {
 
 function renderProgress(state) {
   const active = state.status === "running";
+  const retry = state.kind === "retry_missing";
+  jobActive = active;
   $("search-fields").disabled = active;
+  for (const control of $("filter-form").querySelectorAll("input, select, button")) control.disabled = active || filterBusy;
+  $("retry-missing").disabled = active || filterBusy || !retryEligible;
   $("progress-section").hidden = state.status === "idle";
   $("stop-search").hidden = !active;
   if (active && !state.total) $("progress").removeAttribute("value");
   else $("progress").value = state.total ? state.completed / state.total * 100 : 0;
-  $("progress-count").textContent = active && !state.total ? "Preparing the search plan…" : `${state.completed || 0} / ${state.total || 0} searches · ${seconds(state.elapsed_seconds || 0)} elapsed`;
+  $("progress-count").textContent = active && !state.total ? "Preparing the search plan…" : `${state.completed || 0} / ${state.total || 0} ${retry ? "browser retries" : "searches"} · ${seconds(state.elapsed_seconds || 0)} elapsed`;
   const finishing = active && state.total > 0 && state.completed === state.total;
   $("eta").textContent = active ? finishing ? "Building your table…" : state.eta_seconds === null ? "ETA after the first lookup" : `About ${seconds(state.eta_seconds)} left` : "";
   $("current-route").textContent = state.current || "";
-  $("progress-title").textContent = {running: "Searching flights", done: "Search complete", partial: "Search complete · some sources failed", cancelled: "Search stopped", error: "Search could not finish"}[state.status] || "Search progress";
+  $("progress-title").textContent = (retry ? {running: "Retrieving missing prices", done: "Browser retries complete", partial: "Browser retries complete · some checks failed", cancelled: "Browser retries stopped", error: "Browser retries could not finish"} : {running: "Searching flights", done: "Search complete", partial: "Search complete · some sources failed", cancelled: "Search stopped", error: "Search could not finish"})[state.status] || "Search progress";
+  if (active && !state.cancelled) { $("stop-search").disabled = false; $("stop-search").textContent = retry ? "Stop retries" : "Stop search"; }
 }
 
 function restoreQuery(values) {
@@ -175,7 +184,7 @@ function restoreQuery(values) {
   $("end-date").value = values.end_date;
   $("duration").value = values.trip_lengths[0];
   $("browser-missing").value = values.browser_missing ? "on" : "";
-  $("browser-engine").value = values.browser_engine || "chromium";
+  $("browser-engine").value = values.browser_engine || "native-chrome";
   $("origin").value = values.origins.join(", ");
   const defaultStep = values.mode === "deep" ? 1 : values.trip_lengths[0];
   $("date-step").value = values.date_step_days === defaultStep ? "" : values.date_step_days;
@@ -194,15 +203,21 @@ async function poll(restore = false) {
       submittedSettings = JSON.stringify(query());
     }
     renderProgress(state);
+    const resultVersion = `${state.id}:${state.completed}:${state.status}`;
+    if (state.kind === "retry_missing" && state.has_result && renderedProgress !== resultVersion) {
+      renderResults(await api("/api/result"), restore);
+      displayedJobId = state.id;
+      renderedProgress = resultVersion;
+    }
     if (state.status === "running") {
       polling = setTimeout(poll, 1000);
-    } else if (["done", "partial"].includes(state.status) && renderedJob !== state.id) {
+    } else if ((["done", "partial"].includes(state.status) || state.has_result) && renderedJob !== state.id) {
       const payload = await api("/api/result");
       renderResults(payload, true);
+      displayedJobId = state.id;
       renderedJob = state.id;
-    } else if (state.status === "error") {
-      showError(new Error(state.error));
     }
+    if (state.status === "error") showError(new Error(state.error || "The search could not finish. Existing results remain available."));
   } catch (error) {
     showError(new Error(`Cannot reach the local app. Keep its terminal open. ${error.message}`));
     polling = setTimeout(poll, 3000);
@@ -243,7 +258,7 @@ function renderResults(payload, setFilters = false) {
   if (best) {
     const info = node("div", undefined, "best-info");
     info.append(node("p", "LOWEST QUALIFYING FARE"), node("strong", `${best.destination_name || best.destination} · ${best.origin} → ${best.destination}`),
-      node("p", `${best.departure_date} → ${best.return_date} · ${best.airline} · ${best.stops === 0 ? "Nonstop" : `${best.stops} outbound connection(s)`} · ${best.total_journey_duration}${best.price_source === "google_flights_browser" ? " · browser quote" : ""}`));
+      node("p", `${best.departure_date} → ${best.return_date} · ${best.airline} · ${best.stops === 0 ? "Nonstop" : `${best.stops} outbound connection(s)`} · ${best.total_journey_duration}${best.price_source?.startsWith("google_flights_") ? " · browser quote" : ""}`));
     if (best.gateway_note) info.append(node("p", best.gateway_note));
     banner.append(node("span", money(best.price), "best-price"), info, bookingLink(best, "View flight ↗"));
   } else {
@@ -281,7 +296,7 @@ function renderResults(payload, setFilters = false) {
   const fareBody = tableHead($("fares"), ["Destination / airports", "Dates", "Price", "Airline", "Outbound connections", "Outbound duration", "Flight"]);
   for (const fare of payload.flight_deals) {
     const tr = node("tr");
-    for (const value of [`${fare.destination_name || fare.destination} (${fare.origin} → ${fare.destination})`, `${fare.departure_date} → ${fare.return_date}`, money(fare.price) + (fare.price_source === "google_flights_browser" ? " · browser quote" : ""), fare.airline, fare.stops, fare.total_journey_duration]) tr.append(node("td", value));
+    for (const value of [`${fare.destination_name || fare.destination} (${fare.origin} → ${fare.destination})`, `${fare.departure_date} → ${fare.return_date}`, money(fare.price) + (fare.price_source?.startsWith("google_flights_") ? " · browser quote" : ""), fare.airline, fare.stops, fare.total_journey_duration]) tr.append(node("td", value));
     const booking = node("td");
     booking.append(bookingLink(fare, "View ↗"));
     tr.append(booking);
@@ -296,8 +311,14 @@ function renderResults(payload, setFilters = false) {
   $("unpriced-notice").textContent = `Google returned some itineraries without prices for ${unpricedCarriers.join(", ")}. These cannot be compared by price. Open “Itineraries without prices” for dates; check Google Flights or the airline for a quote.`;
   $("source-warnings").hidden = !warnings.length;
   $("warning-list").replaceChildren(...warnings.map(warning => node("li", `${warning.origin} → ${warning.destination} · ${warning.departure_date} → ${warning.return_date} · ${warning.airlines.join(", ")}: price unavailable`)));
+  const selectedAirlines = (payload.applied_filters || payload.query.filters).airlines || [];
+  const selectedNames = new Set(selectedAirlines.map(name => name.toLocaleLowerCase()));
+  const eligible = warnings.filter(warning => warning.airlines.length && (!selectedNames.size || warning.airlines.some(name => selectedNames.has(name.toLocaleLowerCase()))));
+  retryEligible = new Set(eligible.map(warning => [warning.origin, warning.destination, warning.departure_date, warning.return_date].join("|"))).size;
+  $("retry-missing").disabled = jobActive || filterBusy || !retryEligible;
+  $("retry-missing-count").textContent = retryEligible ? `${retryEligible} saved route/date ${retryEligible === 1 ? "check" : "checks"}` : "No missing prices match the applied airline filters.";
   const attempts = payload.browser_attempts || [];
-  $("browser-retry-summary").hidden = !payload.query.browser_missing;
+  $("browser-retry-summary").hidden = !payload.query.browser_missing && !attempts.length;
   $("browser-retry-summary").textContent = attempts.length ? `Browser retries: ${attempts.length} date/route checks · ${attempts.reduce((total, attempt) => total + attempt.recovered, 0)} quotes recovered. ${attempts.filter(attempt => attempt.status === "unavailable").length} checks failed or timed out. Unresolved prices remain unavailable.` : "Browser retries were enabled; no eligible unpriced itineraries needed a retry.";
 }
 
@@ -345,10 +366,23 @@ $("stop-search").addEventListener("click", async () => {
   catch (error) { showError(error); $("stop-search").disabled = false; }
 });
 
+$("retry-missing").addEventListener("click", async () => {
+  if (jobActive || filterBusy || !retryEligible) return;
+  showError(null);
+  renderProgress({kind: "retry_missing", status: "running", completed: 0, total: retryEligible, elapsed_seconds: 0, eta_seconds: null, current: "Preparing browser retries…"});
+  $("progress-section").scrollIntoView({block: "start"});
+  try {
+    const state = await api("/api/retry-missing", {browser_engine: $("browser-engine").value, job_id: displayedJobId});
+    renderProgress(state);
+    await poll();
+  } catch (error) { await poll(); showError(error); }
+});
+
 async function applyFilters(reset = false) {
-  if (filterBusy) return;
+  if (filterBusy || jobActive) return;
   filterBusy = true;
   showError(null);
+  $("retry-missing").disabled = true;
   $("apply-filters").disabled = $("reset-filters").disabled = true;
   try {
     const values = reset ? {} : filters("filter");
@@ -358,6 +392,7 @@ async function applyFilters(reset = false) {
   finally {
     filterBusy = false;
     $("apply-filters").disabled = $("reset-filters").disabled = false;
+    $("retry-missing").disabled = jobActive || !retryEligible;
   }
 }
 $("filter-form").addEventListener("submit", event => { event.preventDefault(); applyFilters(); });

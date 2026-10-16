@@ -9,7 +9,7 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flight_scanner import REGION_MAP, _duration_minutes, _fare_sort_key, generate_date_pairs_between, scan_flights
+from flight_scanner import FlightLookupError, REGION_MAP, _duration_minutes, _fare_sort_key, generate_date_pairs_between, scan_flights, scan_route
 
 ROOT = Path(__file__).resolve().parent
 
@@ -92,6 +92,124 @@ def filter_fares(fares, *, airports=None, origins=None, max_price=None, max_stop
 
 def cell_key(record):
     return tuple(record[k] for k in ("origin", "destination", "departure_date", "return_date"))
+
+
+def retry_missing_targets(payload, airlines=None):
+    """Use only warning cells from the saved query, in their recorded order."""
+    if payload.get("schema_version") != 1 or not isinstance(payload.get("query"), dict) or not isinstance(payload.get("searches"), list):
+        raise ValueError("input must be a flight_tools search snapshot (schema_version 1)")
+    query = payload["query"]
+    if query.get("currency") != "USD" or query.get("cabin") != "economy" or query.get("flight_passengers") != 1:
+        raise ValueError("browser retry supports saved one-adult USD economy searches")
+    limits = payload.get("applied_filters", query["filters"])
+    airlines = limits.get("airlines") if airlines is None else airlines
+    if airlines is not None and (not isinstance(airlines, list) or any(not isinstance(name, str) for name in airlines)):
+        raise ValueError("saved airline filters must be a list of names")
+    selected = {name.strip().casefold() for name in airlines} if airlines else None
+    airports = {a for d in query["destinations"] for a in d["airports"]}
+    pairs = {tuple(pair) for pair in query["date_pairs"]}
+    allowed = {cell_key(s) for s in payload["searches"] if s["origin"] in query["origins"] and s["destination"] in airports and (s["departure_date"], s["return_date"]) in pairs}
+    targets = {}
+    for warning in payload.get("source_warnings", []):
+        key = cell_key(warning)
+        if key not in allowed:
+            continue
+        for airport in key[:2]:
+            if not isinstance(airport, str) or not re.fullmatch(r"[A-Z]{3}", airport):
+                raise ValueError("saved airports must be three-letter IATA codes")
+        for value in key[2:]:
+            datetime.strptime(value, "%Y-%m-%d")
+        if any(not isinstance(name, str) or not name.strip() or len(name) > 100 for name in warning["airlines"]):
+            raise ValueError("saved warning carriers must be airline names")
+        names = [name for name in warning["airlines"] if selected is None or name.casefold() in selected]
+        if names:
+            target = targets.setdefault(key, {**warning, "airlines": []})
+            target["airlines"] = list(dict.fromkeys(target["airlines"] + names))
+    return list(targets.values())
+
+
+def retry_missing(payload, *, engine="native-chrome", progress=None, output=None):
+    """Use only the selected browser for fixed warning cells and merge into saved fares."""
+    if engine not in ("native-chrome", "chromium", "chrome"):
+        raise ValueError("choose native Chrome, Chromium or headless Chrome")
+    targets = retry_missing_targets(payload)
+    if not targets:
+        raise ValueError("No missing-price cases match the saved result filters")
+    result = copy.deepcopy(payload)
+    filters = result.get("applied_filters", result["query"]["filters"])
+    live_stops = result["query"]["filters"].get("max_stops")
+    if live_stops is not None and (isinstance(live_stops, bool) or not isinstance(live_stops, int) or live_stops < 0):
+        raise ValueError("saved live connection limit must be a nonnegative whole number")
+    raw = result.get("raw_flight_deals", result["flight_deals"])
+    fields = ("origin", "destination", "departure_date", "return_date", "airline", "price", "legs")
+    def fare_key(fare):
+        return json.dumps({key: fare.get(key) for key in fields}, sort_keys=True)
+    merged = {fare_key(fare): fare for fare in raw}
+    result.setdefault("browser_attempts", [])
+    result["retry_summary"] = {"total": len(targets), "completed": 0, "new_quotes": 0, "failed": 0}
+    checked_at = datetime.now(timezone.utc).isoformat()
+    def save():
+        result["raw_flight_deals"] = sorted(merged.values(), key=_fare_sort_key)
+        result["flight_deals"] = filter_fares(result["raw_flight_deals"], **filters)
+        for search in result["searches"]:
+            search["fare_count"] = sum(cell_key(fare) == cell_key(search) for fare in result["raw_flight_deals"])
+        summarize(result)
+        if output:
+            path = Path(output)
+            temporary = path.with_name(path.name + ".tmp")
+            temporary.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            temporary.replace(path)
+    save()  # The first snapshot preserves the original fares on cancellation.
+    for completed, target in enumerate(targets, 1):
+        key = cell_key(target)
+        context = {name: target[name] for name in ("origin", "destination", "departure_date", "return_date")}
+        attempts, warnings = [], []
+        if progress:
+            progress({"event": "phase", "phase": "browser", **context})
+        try:
+            fares = scan_route(*key, max_price=None, max_stops=live_stops, source_warnings=warnings,
+                               browser_missing=True, browser_engine=engine, browser_attempts=attempts,
+                               browser_airlines=target["airlines"],
+                               browser_only=True, unpriced_itineraries=target.get("itineraries"),
+                               browser_stage_callback=(lambda stage: progress({"event": "phase", "phase": "browser", "stage": stage, **context})) if progress else None,
+                               browser_callback=(lambda: progress({"event": "phase", "phase": "browser", **context})) if progress else None)
+            eligible = filter_fares(fares, airlines=target["airlines"])
+            for fare in eligible:
+                identity = fare_key(fare)
+                if identity not in merged:
+                    result["retry_summary"]["new_quotes"] += 1
+                fare.setdefault("price_checked_at", checked_at)
+                location = next(d for d in result["query"]["destinations"] if fare["destination"] in d["airports"])
+                fare["destination_name"], fare["gateway_note"] = location["name"], location.get("gateway_note")
+                merged[identity] = fare
+            present = {name.strip().casefold() for fare in eligible for name in fare["airline"].split(",")}
+            pending = {name.casefold() for warning in warnings for name in warning["airlines"]}
+            resolved = present - pending
+            kept = []
+            for warning in result["source_warnings"]:
+                if cell_key(warning) != key:
+                    kept.append(warning)
+                    continue
+                remaining = [name for name in warning["airlines"] if name.casefold() not in resolved]
+                if remaining:
+                    kept.append({**warning, "airlines": remaining})
+            result["source_warnings"] = kept
+            if not attempts:
+                attempts = [{**context, "status": "recovered" if eligible else "price_unavailable",
+                             "recovered": len(eligible), "engine": engine, "stage": "context",
+                             "message": "Browser prices were available." if eligible else "The retry did not return a priced matching itinerary."}]
+        except FlightLookupError:
+            attempts = [{**context, "status": "unavailable", "recovered": 0, "engine": engine, "stage": "context",
+                         "message": "Could not prepare the browser query; saved fares were retained."}]
+        failed = any(attempt["status"] == "unavailable" for attempt in attempts)
+        result["browser_attempts"].extend(attempts)
+        result["retry_summary"]["completed"] = completed
+        result["retry_summary"]["failed"] += int(failed)
+        save()
+        if progress:
+            progress({"event": "progress", **context, "completed": completed, "total": len(targets),
+                      "status": "unavailable" if failed else "ok"})
+    return result
 
 
 def summarize(payload):
@@ -182,12 +300,18 @@ def main(argv=None):
     search.add_argument("--origin", default="SFO", help="Comma-separated origin airport codes")
     search.add_argument("--dry-run", action="store_true", help="Emit the complete search plan without network requests")
     search.add_argument("--progress-json", action="store_true", help="Emit one structured progress event per lookup on stderr")
-    search.add_argument("--browser-missing", action="store_true", help="Slower optional Playwright retry for unpriced itineraries only")
-    search.add_argument("--browser-engine", choices=["chromium", "chrome"], default="chromium", help="Browser fallback engine; chrome uses installed Google Chrome")
+    search.add_argument("--browser-missing", action="store_true", help="Slower optional browser retry for unpriced itineraries only")
+    search.add_argument("--browser-engine", choices=["native-chrome", "chromium", "chrome"], default="native-chrome", help="Browser fallback engine; native-chrome opens installed Chrome; chrome/chromium use headless Playwright")
     saved = commands.add_parser("filter", help="Filter and rank a saved search without network requests")
     saved.add_argument("--input", required=True)
     saved.add_argument("--dest", help="Saved destination ids/names or airport codes")
     saved.add_argument("--origin", help="Comma-separated origin airport codes")
+    retry = commands.add_parser("retry-missing", help="Retry only saved missing-price cases in a browser and preserve existing fares")
+    retry.add_argument("--input", required=True)
+    retry.add_argument("--browser-engine", choices=["native-chrome", "chromium", "chrome"], default="native-chrome")
+    retry.add_argument("--progress-json", action="store_true")
+    retry.add_argument("--output", help="Save incremental merged snapshots; existing fares survive partial failure")
+    retry.add_argument("--format", choices=["json", "table"], default="json")
     for command in (search, saved):
         add_filters(command)
         command.add_argument("--output", help="Save the full structured JSON snapshot")
@@ -197,6 +321,12 @@ def main(argv=None):
         if args.command == "destinations":
             print(json.dumps(load_pool(args.pool), indent=2, ensure_ascii=False))
             return 0
+        if args.command == "retry-missing":
+            payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+            payload = retry_missing(payload, engine=args.browser_engine, output=args.output,
+                                    progress=(lambda event: print(json.dumps(event), file=sys.stderr, flush=True)) if args.progress_json else None)
+            print(render_table(payload) if args.format == "table" else json.dumps(payload, indent=2, ensure_ascii=False))
+            return 1 if payload["retry_summary"]["failed"] or payload["source_errors"] else 0
         limits = {name: getattr(args, name) for name in ("max_price", "max_stops", "max_duration_hours", "max_layover_hours")}
         for name, value in limits.items():
             if value is not None and (not math.isfinite(value) or value < 0 or (name == "max_price" and value == 0)):

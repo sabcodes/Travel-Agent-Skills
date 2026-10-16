@@ -1,4 +1,5 @@
 import csv
+import copy
 import http.client
 import io
 import json
@@ -188,6 +189,107 @@ class FlightUITests(unittest.TestCase):
             self.app.job["status"] = "done"
             self.assertEqual(self.app.state()["eta_seconds"], 0)
 
+    def missing_snapshot(self):
+        payload = self.completed_snapshot()
+        record = payload["searches"][0]
+        payload["source_warnings"] = [{**{key: record[key] for key in ("origin", "destination", "departure_date", "return_date")},
+                                       "airlines": ["Singapore Airlines"]}]
+        Path(self.app.job["snapshot"]).write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    def test_retry_uses_saved_routes_dates_and_applied_filters_with_a_fresh_job(self):
+        original = copy.deepcopy(self.missing_snapshot())
+        self.app.filter({"airlines": "Singapore Airlines", "max_price": 1200})
+        view = copy.deepcopy(self.app.result())
+        with patch("flight_ui.threading.Thread") as worker:
+            state = self.app.retry_missing({"browser_engine": "chrome"})
+        self.assertEqual(state["kind"], "retry_missing")
+        self.assertEqual(state["total"], 1)
+        self.assertEqual(state["completed"], 0)
+        self.assertTrue(state["has_result"])
+        self.assertNotEqual(state["id"], "test")
+        self.assertEqual(state["query"], original["query"])
+        self.assertEqual(self.app.result(), view)
+        arguments = worker.call_args.kwargs["args"][1]
+        self.assertEqual(arguments[0], "retry-missing")
+        self.assertEqual(arguments[arguments.index("--browser-engine") + 1], "chrome")
+        saved = json.loads(Path(arguments[arguments.index("--input") + 1]).read_text())
+        self.assertEqual(saved["raw_flight_deals"], original["raw_flight_deals"])
+        self.assertEqual(saved["applied_filters"]["airlines"], ["Singapore Airlines"])
+        self.assertEqual(saved["applied_filters"]["max_price"], 1200)
+        self.assertEqual(saved["query"]["date_pairs"], original["query"]["date_pairs"])
+        self.assertNotEqual(arguments[arguments.index("--input") + 1], arguments[arguments.index("--output") + 1])
+        self.app.worker = None
+        self.app.job["status"] = "cancelled"
+
+    def test_retry_rejects_edited_search_inputs_active_jobs_and_no_eligible_prices(self):
+        with self.assertRaisesRegex(ValueError, "Complete a search"):
+            self.app.retry_missing({})
+        self.missing_snapshot()
+        with self.assertRaisesRegex(ValueError, "saved search changed"):
+            self.app.retry_missing({"job_id": "previous-tab-result"})
+        for values in ({"browser_engine": "--config"}, {"start_date": "2027-02-01"}, {"airlines": "Singapore Airlines"}, {"input": "/tmp/other.json"}):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                self.app.retry_missing(values)
+        self.app.job["status"] = "running"
+        with self.assertRaisesRegex(ValueError, "search is running"):
+            self.app.retry_missing({})
+        self.app.job["status"] = "done"
+        self.app.filter({"airlines": "United"})
+        with self.assertRaisesRegex(ValueError, "No missing prices match"):
+            self.app.retry_missing({})
+        self.app.job["result"]["source_warnings"] = []
+        with self.assertRaisesRegex(ValueError, "No missing prices match"):
+            self.app.retry_missing({})
+
+    def test_retry_cancellation_keeps_incremental_quotes_filters_and_exports(self):
+        original = copy.deepcopy(self.missing_snapshot())
+        with patch("flight_ui.threading.Thread"):
+            self.app.retry_missing({})
+        self.app.worker = None
+        job = self.app.job
+        updated = copy.deepcopy(original)
+        fare = {**updated["raw_flight_deals"][0], "price": 1039, "airline": "Singapore Airlines", "price_source": "google_flights_browser"}
+        updated["flight_deals"].append(fare)
+        updated["raw_flight_deals"].append(fare)
+        summarize(updated)
+        Path(job["snapshot"]).write_text(json.dumps(updated), encoding="utf-8")
+        event = {"event": "progress", "origin": fare["origin"], "destination": fare["destination"],
+                 "departure_date": fare["departure_date"], "return_date": fare["return_date"], "completed": 1}
+
+        def stopped_process():
+            job["cancelled"] = True
+            return -15
+
+        process = Mock(stderr=io.StringIO(json.dumps(event) + "\n"))
+        process.wait.side_effect = stopped_process
+        with patch("flight_ui.subprocess.Popen", return_value=process):
+            self.app.run(job, ["retry-missing"])
+        self.assertEqual(job["status"], "cancelled")
+        self.assertEqual(job["completed"], 1)
+        self.assertEqual(len(self.app.result()["raw_flight_deals"]), 3)
+        self.assertEqual(self.app.result()["query"], original["query"])
+        self.assertEqual(len(self.app.filter({})["flight_deals"]), 3)
+        self.assertEqual(self.app.state()["eta_seconds"], 0)
+        self.assertIn("United", csv_table(self.app.result()).decode("utf-8-sig"))
+
+    def test_retry_failure_or_invalid_snapshot_preserves_the_seeded_filtered_result(self):
+        self.missing_snapshot()
+        view = copy.deepcopy(self.app.filter({"max_price": 400}))
+        with patch("flight_ui.threading.Thread"):
+            self.app.retry_missing({})
+        self.app.worker = None
+        job = self.app.job
+        Path(job["snapshot"]).write_text("{", encoding="utf-8")
+        process = Mock(stderr=io.StringIO("Browser failed\n"))
+        process.wait.return_value = 2
+        with patch("flight_ui.subprocess.Popen", return_value=process):
+            self.app.run(job, ["retry-missing"])
+        self.assertEqual(job["status"], "error")
+        self.assertEqual(self.app.result(), view)
+        self.assertEqual(self.app.state()["has_result"], True)
+        self.assertEqual(self.app.filter({"max_price": 400}), view)
+
     def test_http_restricts_host_origin_token_and_static_files(self):
         self.completed_snapshot()
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -219,6 +321,13 @@ class FlightUITests(unittest.TestCase):
         self.assertIn("flight-comparison.csv", headers["Content-Disposition"])
         self.assertIn("375.00", data.decode("utf-8-sig"))
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
+        self.assertEqual(request("/api/retry-missing", {"browser_engine": "chrome"})[0], 403)
+        self.assertEqual(request("/api/retry-missing", {"browser_engine": "--config"}, {"X-CSRF-Token": self.app.csrf})[0], 400)
+        with patch.object(self.app, "retry_missing", return_value={"status": "running", "kind": "retry_missing"}) as retry:
+            status, body, _ = request("/api/retry-missing", {"browser_engine": "chrome", "job_id": "test"}, {"X-CSRF-Token": self.app.csrf})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["kind"], "retry_missing")
+        retry.assert_called_once_with({"browser_engine": "chrome", "job_id": "test"})
 
 
 if __name__ == "__main__":

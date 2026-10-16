@@ -215,6 +215,9 @@ def scan_route(
     browser_attempts: Optional[List[Dict[str, Any]]] = None,
     browser_callback: Optional[Callable[[], None]] = None,
     browser_airlines: Optional[List[str]] = None,
+    browser_stage_callback=None,
+    browser_only: bool = False,
+    unpriced_itineraries: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Scrapes Google Flights for a specific route and dates using fast-flights.
@@ -235,18 +238,15 @@ def scan_route(
             )
             trip_type = "round-trip"
 
+        q = create_filter(flights=flights_query, trip=trip_type, currency="USD", language="en-US", seat="economy", max_stops=max_stops)
         last_error = None
         for attempt in range(1, FLIGHT_LOOKUP_ATTEMPTS + 1):
             try:
-                q = create_filter(
-                    flights=flights_query,
-                    trip=trip_type,
-                    currency="USD",
-                    language="en-US",
-                    seat="economy",
-                    max_stops=max_stops,
-                )
-                results = _get_flights_resilient(q)
+                if browser_only:
+                    from flight_browser import saved_browser_items
+                    results = saved_browser_items(unpriced_itineraries, browser_airlines or [])
+                else:
+                    results = _get_flights_resilient(q)
                 break
             except Exception as error:
                 last_error = error
@@ -267,7 +267,7 @@ def scan_route(
             from flight_browser import fill_missing_prices
             if browser_callback:
                 browser_callback()
-            browser_report = fill_missing_prices(q, results, engine=browser_engine, airlines=browser_airlines)
+            browser_report = fill_missing_prices(q, results, engine=browser_engine, airlines=browser_airlines, browser_only=browser_only, **({"progress": browser_stage_callback} if browser_stage_callback else {}))
             if browser_attempts is not None:
                 browser_attempts.append({"origin": origin, "destination": destination,
                                         "departure_date": dep_date, "return_date": ret_date, **browser_report})
@@ -281,6 +281,13 @@ def scan_route(
                 "departure_date": dep_date, "return_date": ret_date,
                 "status": "price_unavailable", "airlines": unpriced_airlines,
                 "message": "Google returned itineraries without numeric prices; excluded from fare comparisons.",
+                "itineraries": [{"airlines": item.airlines, "flights": [
+                    {"from_airport": {"code": leg.from_airport.code, "name": leg.from_airport.name},
+                     "to_airport": {"code": leg.to_airport.code, "name": leg.to_airport.name},
+                     "departure": {"date": leg.departure.date, "time": leg.departure.time},
+                     "arrival": {"date": leg.arrival.date, "time": leg.arrival.time},
+                     "duration": leg.duration, "plane_type": leg.plane_type} for leg in item.flights]}
+                    for item in results if item.price is None and item.flights],
             })
         if not results:
             return deals
@@ -457,6 +464,7 @@ def scan_flights(
                         browser_engine=browser_engine,
                         browser_attempts=browser_attempts,
                         browser_airlines=browser_airlines,
+                        browser_stage_callback=(lambda stage: progress_callback({**record, "event": "phase", "phase": "browser", "stage": stage, "completed": completed, "total": total})) if progress_callback else None,
                         browser_callback=(lambda: progress_callback({**record, "event": "phase", "phase": "browser", "completed": completed, "total": total})) if progress_callback else None,
                     )
                     successful_lookups += 1
