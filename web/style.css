@@ -83,6 +83,7 @@ progress::-moz-progress-bar { background: var(--green); }
 .best-fare strong { display: block; margin-bottom: 2px; font-size: 16px; }
 .filter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: end; }
 .filter-buttons { display: flex; align-items: center; gap: 12px; padding-bottom: 2px; }
+.missing-price-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
 .table-heading { margin: 28px 0 14px; }
 .table-heading span { color: var(--muted); font-size: 11px; }
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }

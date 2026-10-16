@@ -1,15 +1,13 @@
 # Shareable announcement
 
-We built a deterministic Chrome/CDP prototype that retrieves Singapore Airlines prices when our tested flight-search paths returned flights without fares.
+Our local flight finder now has a deterministic **Retrieve missing prices (slower)** button for fares the regular search leaves unpriced. It opens disposable visible Chrome, checks Cheapest, filters airlines, and merges verified individual prices into the table, cheapest banner and CSV/JSON exports. It shows progress and ETA and preserves completed results when stopped.
 
-For SFO-Dhaka, it recovered five Singapore-only outbound options with Singapore selected in both directions. Network quotes matched the final Google Flights Cheapest rows. Three fresh sessions passed for January 12-February 13, 2027, starting at $1,067; a five-day January 12-16 search passed, starting at $1,573. Those are observed USD economy round-trip starting quotes from October 14, 2026.
+The October 15, 2026 live app test recovered five Singapore Airlines outbound options for SFO–Dhaka, January 12–16, 2027, with a lowest observed USD economy round-trip starting quote of $1,573. Numeric network quotes matched final individual Cheapest rows and both request directions were restricted to Singapore. Prices change; these are search starting quotes, not held tickets or selected-return booking totals.
 
-No login, personal browser profile, or agent-driven clicking is required: the experiment runs with CLI commands. We publish the reproducible method, comparison findings, screenshot, and verifier. The verifier rejects header-only amounts, stale/transient prices, wrong dates, and missing return-side airline filters.
+No login, personal Chrome profile, Node installation or agent deciding browser actions is required. Run the app or use the same CLI directly. Setup needs Python flight requirements and installed Google Chrome. The optional developer UI tests use Playwright to drive the local app.
 
-The prototype runs in visible installed Chrome on an Apple Silicon Mac, with Python and Node.js 24+. App integration, Intel testing, and native headless mode remain next steps.
+![Native Chrome recovery in the local app](screenshots/singapore-app-recovery.png)
 
-[Code, demo and instructions](https://github.com/sabcodes/Travel-Agent-Skills/releases/tag/native-chrome-prototype-2026-10-14).
+Our recorded checks of fast-flights, fli and ordinary headless Playwright did not recover these Singapore prices. The native Chrome path did. We publish the method, limitations and repeatable tests; this is not a claim about every route or competing tool. Verified on Apple Silicon macOS; Intel hardware and native headless mode remain untested.
 
-![Verified automated Singapore pricing](screenshots/singapore-native-chrome.png)
-
-Comparison claims apply to our recorded tests of fast-flights, fli and ordinary Playwright. We have not established an industry-wide ranking or exclusive capability.
+[Setup, app demo and CLI commands](https://github.com/sabcodes/Travel-Agent-Skills#recover-missing-singapore-prices-experimental).

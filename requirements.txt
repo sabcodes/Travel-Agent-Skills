@@ -7,4 +7,4 @@ rich>=13.0.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 pyairbnb>=0.0.12
-curl_cffi>=0.5.0
+curl_cffi>=0.16.3,<1

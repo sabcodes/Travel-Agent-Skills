@@ -57,8 +57,8 @@
             <label class="field">Price ceiling (USD)<input id="search-max-price" type="number" min="0.01" step="0.01" placeholder="No limit"></label>
             <label class="field">Outbound duration (hours)<input id="search-max-duration-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
             <label class="field">Connection wait (hours)<input id="search-max-layover-hours" type="number" min="0" step="0.5" placeholder="No limit"></label>
-            <label class="field">Missing prices<select id="browser-missing"><option value="">Keep fast search</option><option value="on">Retry in browser (slower)</option></select><small>Experimental headless retry for unpriced itineraries. Adds browser loading time; prices may remain unavailable. Requires optional browser setup.</small></label>
-            <label class="field">Browser for retries<select id="browser-engine"><option value="chromium">Downloaded Chromium</option><option value="chrome">Installed Google Chrome</option></select></label>
+            <label class="field">Missing prices<select id="browser-missing"><option value="">Keep fast search</option><option value="on">Retry in browser (slower)</option></select><small>Optional slower retry for unpriced itineraries. Native Chrome opens a temporary window and closes it after each lookup; prices may remain unavailable.</small></label>
+            <label class="field">Browser for retries<select id="browser-engine"><option value="native-chrome">Native Chrome (opens window)</option><option value="chromium">Headless Chromium (Playwright)</option><option value="chrome">Headless Chrome (Playwright)</option></select></label>
           </div>
           <p class="hint">A live layover limit restricts the provider search. Duration and wait limits describe outbound travel. Airline filters require every reported carrier to be selected.</p>
         </details>
@@ -91,8 +91,12 @@
     </section>
     <details class="card fare-details"><summary id="fares-summary">Matching flights</summary><div class="table-scroll" tabindex="0" role="region" aria-label="Matching flight itineraries"><table id="fares"></table></div></details>
     <details id="source-errors" class="card fare-details" hidden><summary id="errors-summary">Source errors</summary><ul id="error-list"></ul></details>
-    <details id="source-warnings" class="card fare-details" hidden><summary>Itineraries without prices</summary><ul id="warning-list"></ul></details>
-    <p class="footnote">Quotes can change. Connections, waits, and durations describe outbound travel; selected return legs are unavailable. Gateway fares exclude onward transport. Booking links open a search, not a held ticket.</p>
+    <details id="source-warnings" class="card fare-details" hidden>
+      <summary>Itineraries without prices</summary><ul id="warning-list"></ul>
+      <div class="missing-price-actions"><button type="button" class="secondary" id="retry-missing">Retrieve missing prices (slower)</button><span id="retry-missing-count" class="hint"></span></div>
+      <p class="hint">Uses a separate browser process for the saved routes and dates, with your applied result filters. Native Chrome opens a fresh temporary window, checks Cheapest, applies airline filters, verifies individual prices, and closes its window. Requires installed Google Chrome. Choose an engine in Advanced options. This is slower and prices may remain unavailable. Existing fares stay available.</p>
+    </details>
+    <p class="footnote">Round-trip starting quotes can change. Connections, waits, and durations describe outbound travel; selected return legs are unavailable. Gateway fares exclude onward transport. Booking links open a search, not a held ticket.</p>
   </section>
   <footer>Runs on your Mac. Powered by the flight search CLI.</footer>
   <datalist id="airline-options"></datalist>

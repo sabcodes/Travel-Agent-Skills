@@ -27,6 +27,60 @@ LABEL = ("From 995 US dollars round trip total. 1 stop flight with Singapore Air
 
 
 class BrowserQuoteTests(unittest.TestCase):
+    def browser_page(self, fail_expansion=False):
+        state = {"tab": "Best", "visits": []}
+        page = Mock()
+        labels = Mock()
+        labels.evaluate_all.side_effect = lambda *_: [LABEL] if state["tab"] == "Cheapest" else []
+        body = Mock()
+        body.inner_text.return_value = "2 results returned"
+        page.locator.side_effect = lambda selector: body if selector == "body" else labels
+        more, cheapest = Mock(), Mock()
+        more.count.return_value = cheapest.count.return_value = 1
+        cheapest.get_attribute.return_value = "false"
+        def switch():
+            state["tab"] = "Cheapest"
+            state["visits"].append("Cheapest")
+        cheapest.click.side_effect = lambda **_: switch()
+        cheapest.press.side_effect = lambda *_, **__: switch()
+        def expand(**_):
+            state["visits"].append("more_" + state["tab"])
+            if state["tab"] == "Best" or fail_expansion:
+                raise RuntimeError("provider expansion failed")
+        more.click.side_effect = expand
+        more.press.side_effect = lambda *_, **kwargs: expand(**kwargs)
+        page.get_by_role.side_effect = lambda role, **kwargs: more if kwargs.get("name") == "View more flights" else cheapest
+        browser = Mock()
+        browser.new_page.return_value = page
+        manager = Mock()
+        manager.__enter__ = Mock(return_value=NS(chromium=NS(launch=Mock(return_value=browser))))
+        manager.__exit__ = Mock(return_value=False)
+        module = ModuleType("playwright.sync_api")
+        module.sync_playwright = Mock(return_value=manager)
+        return module, state
+
+    def test_cheapest_is_checked_before_a_best_expansion_can_abort_recovery(self):
+        query = create_filter(flights=[FlightQuery(date="2027-01-14", from_airport="SFO", to_airport="DAC"),
+                                      FlightQuery(date="2027-02-09", from_airport="DAC", to_airport="SFO")], trip="round-trip", currency="USD")
+        item = itinerary()
+        module, state = self.browser_page()
+        with patch.dict("sys.modules", {"playwright.sync_api": module}):
+            report = fill_missing_prices(query, [item])
+        self.assertEqual(state["visits"][0], "Cheapest")
+        self.assertEqual(item.price, 995)
+        self.assertEqual(report["recovered"], 1)
+
+    def test_later_expansion_failure_keeps_an_earlier_exact_dom_quote(self):
+        query = create_filter(flights=[FlightQuery(date="2027-01-14", from_airport="SFO", to_airport="DAC"),
+                                      FlightQuery(date="2027-02-09", from_airport="DAC", to_airport="SFO")], trip="round-trip", currency="USD")
+        item = itinerary()
+        module, _ = self.browser_page(fail_expansion=True)
+        with patch.dict("sys.modules", {"playwright.sync_api": module}):
+            report = fill_missing_prices(query, [item])
+        self.assertEqual(report["status"], "unavailable")
+        self.assertEqual(item.price, 995)
+        self.assertEqual(report["recovered"], 1)
+
     def test_accepts_an_exact_quote_once_and_records_provenance(self):
         item = itinerary()
         self.assertEqual(apply_browser_prices([item], [LABEL, LABEL]), 1)

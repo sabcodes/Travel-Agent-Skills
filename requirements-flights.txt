@@ -1,2 +1,4 @@
 # Minimal dependencies for flight_tools.py and the local browser UI.
 fast-flights>=3.1.0,<4
+# Native Chrome uses the existing HTTP dependency for its local CDP socket.
+curl_cffi>=0.16.3,<1

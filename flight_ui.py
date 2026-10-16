@@ -1,5 +1,6 @@
 """Local browser UI backed by the flight_tools CLI; no web dependencies."""
 import argparse
+import copy
 import csv
 import io
 import json
@@ -96,9 +97,9 @@ def search_arguments(values, pool):
     browser_missing = values.get("browser_missing", False)
     if not isinstance(browser_missing, bool):
         raise ValueError("Browser retry must be on or off")
-    engine = values.get("browser_engine", "chromium")
-    if engine not in ("chromium", "chrome"):
-        raise ValueError("Choose Chromium or installed Chrome")
+    engine = values.get("browser_engine", "native-chrome")
+    if engine not in ("native-chrome", "chromium", "chrome"):
+        raise ValueError("Choose native Chrome, Chromium or headless Chrome")
     if browser_missing:
         arguments.append("--browser-missing")
     arguments.extend(["--browser-engine", engine])
@@ -191,7 +192,7 @@ class App:
             pool_path.write_text(json.dumps(pool), encoding="utf-8")
             snapshot = folder / "result.json"
             snapshot.unlink(missing_ok=True)
-            self.job = {"id": uuid.uuid4().hex, "status": "running", "completed": 0,
+            self.job = {"id": uuid.uuid4().hex, "kind": "search", "status": "running", "completed": 0,
                         "total": plan["summary"]["planned_searches"], "started": time.monotonic(),
                         "current": "Fetching the first fare…", "error": None, "cancelled": False,
                         "snapshot": str(snapshot), "result": None, "view": None, "query": plan["query"]}
@@ -199,6 +200,57 @@ class App:
                                            "--output", str(snapshot), "--progress-json"]), daemon=True)
             self.worker.start()
             return self.state()
+
+    def retry_missing(self, values):
+        """Retry the saved result's missing quotes without rebuilding its date grid."""
+        from flight_tools import retry_missing_targets
+
+        if set(values) - {"browser_engine", "job_id"}:
+            raise ValueError("Retry uses the saved search and applied result filters; only choose a browser engine")
+        engine = values.get("browser_engine", "native-chrome")
+        if engine not in ("native-chrome", "chromium", "chrome"):
+            raise ValueError("Choose native Chrome, Chromium or headless Chrome")
+        with self.lock:
+            if self.job and self.job["status"] == "running":
+                raise ValueError("A search is running; stop it before retrying missing prices")
+            if not self.job or self.job.get("result") is None:
+                raise ValueError("Complete a search before retrying missing prices")
+            if "job_id" in values and values["job_id"] != self.job["id"]:
+                raise ValueError("The saved search changed; refresh the results before retrying")
+            payload = copy.deepcopy(self.job["result"])
+            view = copy.deepcopy(self.job["view"])
+            payload["applied_filters"] = copy.deepcopy(view.get("applied_filters", payload["query"]["filters"]))
+            targets = retry_missing_targets(payload)
+            if not targets:
+                raise ValueError("No missing prices match the saved search and applied airline filters")
+            identifier = uuid.uuid4().hex
+            folder = Path(self.temp.name) / identifier
+            folder.mkdir()
+            input_path, snapshot = folder / "input.json", folder / "result.json"
+            input_path.write_text(json.dumps(payload), encoding="utf-8")
+            # A durable seed also keeps filters and downloads working after an early stop.
+            snapshot.write_text(json.dumps(view), encoding="utf-8")
+            self.job = {"id": identifier, "kind": "retry_missing", "status": "running", "completed": 0,
+                        "total": len(targets), "started": time.monotonic(), "current": "Preparing browser retries…", "estimated_lookup_seconds": 45 if engine == "native-chrome" else 30,
+                        "error": None, "cancelled": False, "snapshot": str(snapshot), "result": payload,
+                        "view": view, "query": copy.deepcopy(payload["query"])}
+            arguments = ["retry-missing", "--input", str(input_path), "--browser-engine", engine,
+                         "--output", str(snapshot), "--progress-json"]
+            self.worker = threading.Thread(target=self.run, args=(self.job, arguments), daemon=True)
+            self.worker.start()
+            return self.state()
+
+    def refresh_retry_result(self, job):
+        if job.get("kind") != "retry_missing":
+            return
+        try:
+            payload = json.loads(Path(job["snapshot"]).read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and payload.get("query") == job["query"] and isinstance(payload.get("flight_deals"), list):
+                job["result"] = payload
+                job["view"] = payload
+        except (OSError, ValueError):
+            # Interrupted writes must never replace the last valid result.
+            pass
 
     def run(self, job, arguments):
         errors = []
@@ -222,12 +274,14 @@ class App:
                     with self.lock:
                         job["completed"] = event["completed"]
                         job["current"] = f'{event["origin"]} → {event["destination"]} · {event["departure_date"]} to {event["return_date"]}'
+                        self.refresh_retry_result(job)
                 elif event.get("event") == "phase" and event.get("phase") == "browser":
                     with self.lock:
-                        job["current"] = f'Browser retry (slower) · {event["origin"]} → {event["destination"]} · {event["departure_date"]} to {event["return_date"]}'
+                        job["current"] = f'{event.get("stage", "Browser retry").replace("_", " ").title()} (slower) · {event["origin"]} → {event["destination"]} · {event["departure_date"]} to {event["return_date"]}'
             code = process.wait()
             process.stderr.close()
             with self.lock:
+                self.refresh_retry_result(job)
                 if job["cancelled"]:
                     job["status"] = "cancelled"
                 elif code in (0, 1) and Path(job["snapshot"]).exists():
@@ -243,6 +297,9 @@ class App:
                 job["error"] = str(error)
         finally:
             with self.lock:
+                self.refresh_retry_result(job)
+                if job.get("kind") == "retry_missing" and job.get("view") is not None:
+                    Path(job["snapshot"]).write_text(json.dumps(job["view"]), encoding="utf-8")
                 job["finished"] = time.monotonic()
                 if job["cancelled"]:
                     job["status"] = "cancelled"
@@ -256,11 +313,16 @@ class App:
             job = self.job
             elapsed = job.get("finished", time.monotonic()) - job["started"]
             completed, total = job["completed"], job["total"]
-            # Estimate only after an actual lookup; provider retries make it approximate.
-            remaining = max(0, elapsed / completed * total - elapsed) if completed else None
+            # Separate retries start with an estimate; measured averages take over.
+            remaining = None
+            if completed:
+                remaining = max(0, elapsed / completed * total - elapsed)
+            elif "estimated_lookup_seconds" in job:
+                remaining = max(0, job["estimated_lookup_seconds"] * total - elapsed)
             return {key: job[key] for key in ("id", "status", "completed", "total", "current", "error")} | {
                 "elapsed_seconds": elapsed, "eta_seconds": remaining if job["status"] == "running" else 0,
-                "query": job.get("query")}
+                "query": job.get("query"), "kind": job.get("kind", "search"), "has_result": job.get("view") is not None,
+                "cancelled": job.get("cancelled", False)}
 
     def result(self):
         with self.lock:
@@ -364,6 +426,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"total": plan["summary"]["planned_searches"], "windows": len(plan["query"]["date_pairs"])})
             elif path == "/api/search":
                 self.send(app.start(values))
+            elif path == "/api/retry-missing":
+                self.send(app.retry_missing(values))
             elif path == "/api/locations":
                 self.send(app.add_location(values), status=201)
             elif path == "/api/filter":
